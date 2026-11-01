@@ -195,6 +195,11 @@ Use this general mapping:
 
 Do not let `README.md`, specs, contracts, and implementation drift apart.
 
+Record user-visible changes and migration instructions in `CHANGELOG.md` under
+`[Unreleased]`. A version-bump PR promotes these notes to a dated version entry.
+GitHub release notes are extracted from that entry after PyPI install verification;
+follow `docs/releasing.md` and preserve published notes and artifacts on retries.
+
 ## Agent Working Style
 
 Submit changes from a `dev/` branch through a pull request to `main`.

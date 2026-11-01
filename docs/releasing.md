@@ -9,13 +9,15 @@ CI workflow before publishing:
 
 ```text
 tests → build/check/install → TestPyPI → TestPyPI install check
-      → PyPI → PyPI install check
+      → PyPI → PyPI install check → GitHub release
 ```
 
 Each stage requires its predecessor to succeed. Both registries receive the
 same wheel and source distribution. Index checks install the exact tagged
 version, exercise endpoint-free CLI exploration and real MCP tool discovery,
 and retry index installation up to six times with ten seconds between attempts.
+Each retry refreshes cached `flash-context` metadata so an initial index miss
+does not persist for the entire retry loop.
 TestPyPI supplies only `flash-context`; its dependencies come from PyPI.
 Publishing jobs use short-lived OIDC credentials and generate attestations via
 the [PyPA publishing action](https://github.com/pypa/gh-action-pypi-publish).
@@ -48,8 +50,19 @@ GitHub Actions secrets are needed. See the
 
 ## Publish a version
 
-Set the version in `pyproject.toml` and refresh `uv.lock`; `uv version` does
-both. Runtime `flash_context.__version__` reads the installed metadata.
+Keep user-visible changes in `CHANGELOG.md` under `[Unreleased]`, grouped into
+`Added`, `Changed`, `Fixed`, or `Migration` as appropriate. Include instructions
+for changed defaults or configuration. Omit empty headings and internal-only
+work. This file is the source of GitHub release notes; do not maintain a separate
+copy of the notes in the workflow.
+
+When preparing a release, move those entries into a dated section matching the
+new package version, for example `## [0.2.1] - YYYY-MM-DD` using the actual release
+date. Leave `[Unreleased]` for future changes. Do not rewrite published entries
+unless correcting an error. Set the version in `pyproject.toml` and refresh
+`uv.lock`; `uv version` does both. Runtime `flash_context.__version__` reads the
+installed metadata. The examples below show the already released version; choose
+a new version for the next release.
 
 ```bash
 uv version 0.2.0
@@ -57,6 +70,7 @@ uv sync --locked --extra mcp
 uv run --locked ruff check .
 uv run --locked mypy
 uv run --locked pytest -m "not e2e"
+uv run --locked python scripts/release_notes.py
 uv build
 uvx twine check --strict dist/*
 ```
@@ -76,6 +90,32 @@ suffixes, for example `v0.2.0rc1`). Every accepted version tag publishes to both
 registries. Existing versions/files are not overwritten or silently skipped;
 use a new version after a partially published release. Re-running failed jobs
 can resume from a failed stage when its upload has not already succeeded.
+
+## GitHub release publication and recovery
+
+The final `github-release` job requires successful PyPI installation verification.
+It downloads the existing `distributions` artifact instead of rebuilding, extracts
+the matching changelog section, creates a draft, uploads the wheel and source
+archive, then publishes the release. Prerelease tags such as `v0.3.0rc1` create
+GitHub prereleases. Only this job receives `contents: write`; registry upload
+permissions remain limited to their jobs.
+
+CI validates the current package's changelog section on branches and pull
+requests, and additionally checks the tag/version match on tag builds. Missing,
+duplicate, undated, invalid-date, or empty entries fail before any publication.
+The source distribution includes `CHANGELOG.md`.
+
+If GitHub publication fails after PyPI succeeds, rerun only the failed jobs in
+the same Actions run. Do not push another tag or rerun successful registry uploads.
+A retry resumes an existing draft, uploads missing assets, verifies existing
+assets against their SHA-256 digests, and preserves existing release notes.
+A matching published release is left unchanged. An existing asset with a different
+or missing digest stops the job for manual inspection; assets are never replaced
+automatically. Resolve conflicting assets deliberately before retrying.
+
+Changes to release automation take effect in tags containing the updated workflow;
+rerunning an old tag uses its original workflow. The existing v0.2.0 GitHub release
+was created manually and is retained unchanged.
 
 ## Local installed-package checks
 

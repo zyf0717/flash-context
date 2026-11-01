@@ -50,7 +50,7 @@ jobs:
           version=${RELEASE_TAG#v}
           uv venv /tmp/index-check
           for attempt in {1..6}; do
-            if uv pip install --python /tmp/index-check/bin/python --no-deps --index-url https://test.pypi.org/simple/ "flash-context==$version"; then
+            if uv pip install --refresh-package flash-context --python /tmp/index-check/bin/python --no-deps --index-url https://test.pypi.org/simple/ "flash-context==$version"; then
               break
             fi
             if [ "$attempt" -eq 6 ]; then exit 1; fi
@@ -93,10 +93,33 @@ jobs:
           version=${RELEASE_TAG#v}
           uv venv /tmp/index-check
           for attempt in {1..6}; do
-            if uv pip install --python /tmp/index-check/bin/python "flash-context[mcp]==$version"; then
+            if uv pip install --refresh-package flash-context --python /tmp/index-check/bin/python "flash-context[mcp]==$version"; then
               break
             fi
             if [ "$attempt" -eq 6 ]; then exit 1; fi
             sleep 10
           done
           PATH="/tmp/index-check/bin:$PATH" /tmp/index-check/bin/python scripts/smoke_test.py "$version" --mcp
+
+  github-release:
+    needs: verify-pypi
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: distributions
+          path: dist
+      - name: Publish curated GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 scripts/release_notes.py "$RELEASE_TAG" > "$RUNNER_TEMP/release-notes.md"
+          python3 scripts/github_release.py "$RELEASE_TAG" --repo "$GH_REPO" --notes "$RUNNER_TEMP/release-notes.md" --dist dist

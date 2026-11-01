@@ -65,6 +65,9 @@ FLASH_CONTEXT_RUN_E2E=1 uv run --locked pytest tests/e2e/test_current_repo_multi
 - Update the relevant specs, contracts, README, and user-facing documentation
   when changing public behavior.
 - Refresh `uv.lock` with `uv lock` when changing dependencies.
+- Add user-visible changes and migration instructions to `CHANGELOG.md` under
+  `[Unreleased]`. Version preparation promotes those notes to a dated release
+  entry; see [Releasing](docs/releasing.md).
 
 Read [AGENTS.md](AGENTS.md) for repository-wide guidance,
 [specs](specs/) for behavior and contracts, and

@@ -127,8 +127,9 @@ Add operational guardrails after the core paths work:
 - README quickstart and examples for Codex, Copilot, and MCP clients.
 - PyPI metadata and explicit wheel/source distribution contents.
 - Clean installed-package checks for CLI exploration and the real MCP SDK.
-- Tag-driven tests, build, TestPyPI install verification, PyPI publication, and
-  PyPI install verification; see [Releasing](releasing.md) and
+- Curated changelog history, tag-driven tests, build, TestPyPI install
+  verification, PyPI publication and install verification, then GitHub release
+  publication with the same artifacts; see [Releasing](releasing.md) and
   [spec 008](../specs/008-pypi-release/spec.md).
 
 Exit criteria:

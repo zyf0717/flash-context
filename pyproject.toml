@@ -52,6 +52,7 @@ include = [
   "/src/flash_context",
   "/pyproject.toml",
   "/README.md",
+  "/CHANGELOG.md",
   "/LICENSE",
   "/config.yaml.example",
   "/.env.example",
@@ -74,5 +75,5 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.13"
 strict = true
-files = ["src/flash_context", "tests/unit", "tests/contract"]
+files = ["src/flash_context", "tests/unit", "tests/contract", "scripts"]
 exclude = ["tests/fixtures"]
