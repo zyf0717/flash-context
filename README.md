@@ -16,6 +16,9 @@ Codebases and repositories are the current focus; the same tools explore
 documentation, configuration, and other local text files. CLI and MCP share one
 exploration core with read-only tools, path safety, and resource limits.
 
+Inspired by [FastContext](https://arxiv.org/abs/2606.14066), a now-withdrawn paper
+on delegating repository exploration to a dedicated model.
+
 ## Quickstart
 
 Requires Python 3.13+, `uv`, and an OpenAI-compatible model endpoint with tool

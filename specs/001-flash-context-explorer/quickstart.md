@@ -6,7 +6,7 @@ This quickstart describes the implemented CLI-first behavior for spec `001`.
 
 - Python 3.13+
 - `uv`
-- OpenAI-compatible FastContext endpoint
+- OpenAI-compatible model endpoint with tool calling support
 - Local repository to inspect
 
 ## Install from PyPI

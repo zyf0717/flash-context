@@ -7,7 +7,7 @@ Input: Feature specification from `/specs/001-flash-context-explorer/spec.md`
 ## Summary
 
 Build a Python 3.13+ repository exploration harness with a CLI MVP. The core
-loop sends a focused query to an OpenAI-compatible FastContext-style endpoint,
+loop sends a focused query to an OpenAI-compatible endpoint,
 executes only root-scoped read-only local tools, and returns compact citations.
 MCP is added as an adapter over the same core after the CLI path works.
 
@@ -35,7 +35,7 @@ Constraints: Read-only repository access, root-scoped path resolution, no model
 serving, no vector database ownership, no repository mutation
 
 Scale/Scope: Local repositories large enough for coding-agent workflows; initial
-quality depends on the configured FastContext-compatible endpoint
+quality depends on the configured model and OpenAI-compatible endpoint
 
 ## Constitution Check
 

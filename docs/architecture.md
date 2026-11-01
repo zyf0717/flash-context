@@ -3,8 +3,8 @@
 `flash-context` is a CLI-first context explorer for AI agents, currently focused
 on codebases and repositories. Its local tools also apply to documentation,
 configuration, and other text files within a selected root. CLI and MCP adapters
-call a shared core, which talks to an OpenAI-compatible FastContext-style
-endpoint and executes root-scoped, read-only local tools.
+call a shared core, which talks to an OpenAI-compatible endpoint and executes
+root-scoped, read-only local tools.
 
 ```text
 CLI / MCP adapter → shared exploration core → model endpoint
@@ -40,9 +40,9 @@ Primary planning artifacts:
 - [PyPI release pipeline](../specs/008-pypi-release/spec.md)
 - [Implementation order](implementation-order.md)
 
-## FastContext Alignment
+## FastContext inspiration
 
-This project intentionally follows Microsoft FastContext's explorer shape:
+The exploration design draws on FastContext's delegated explorer approach:
 
 - Delegated repository exploration: CLI/MCP call a focused explorer core that
   returns evidence for a downstream coding agent.
@@ -54,9 +54,10 @@ This project intentionally follows Microsoft FastContext's explorer shape:
 - Compact evidence: citation mode renders controller-validated `path:start-end`
   lines, with the model prompted toward a `<final_answer>` block.
 
-Primary references: [Microsoft FastContext README](https://github.com/microsoft/fastcontext),
-[FastContext model card](https://huggingface.co/microsoft/FastContext-1.0-4B-SFT),
-and [FastContext paper](https://arxiv.org/html/2606.14066v1).
+The [FastContext paper](https://arxiv.org/abs/2606.14066) has been withdrawn, and
+its [original repository](https://github.com/microsoft/fastcontext) is no longer
+publicly available. These are historical design references; the endpoint
+contract is OpenAI-compatible chat completions with tool calling.
 
 ## Scope
 
