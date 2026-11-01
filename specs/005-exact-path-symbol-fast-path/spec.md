@@ -174,3 +174,11 @@ Regression tests cover:
 Opt-in endpoint-backed e2e timing tests may include exact path and exact unique
 symbol cases. Expected local latency should be sub-second, but timing should not
 be a default CI assertion.
+
+## Exact-symbol validation refinement
+
+Spec [011](../011-symbol-evidence-validation/spec.md) retains typed definition
+scan outcomes for the model loop and requires the whole case-sensitive query
+token inside accepted exact-symbol citation ranges, including all fallbacks.
+Zero Python definitions still routes to the model; it does not establish absence
+from assignments, imports, docs, or other languages. No additional scan is needed.

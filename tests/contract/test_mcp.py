@@ -18,7 +18,14 @@ from flash_context.mcp_server import explore_repository_handler
 from flash_context.types import Citation, ExploreRequest, ExploreResult, RawLocation
 
 
-def test_mcp_handler_delegates_to_core(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "warning",
+    [
+        "implementation source not verified; returning documentation evidence",
+        "query symbol not found in verified evidence",
+    ],
+)
+def test_mcp_handler_delegates_to_core(tmp_path: Path, warning: str) -> None:
     captured: dict[str, object] = {}
     settings = Settings(base_url="http://test/v1", model="test-model")
 
@@ -35,13 +42,11 @@ def test_mcp_handler_delegates_to_core(tmp_path: Path) -> None:
             ],
             turns_used=1,
             truncated=True,
-            warnings=[
-                "implementation source not verified; returning documentation evidence"
-            ],
+            warnings=[warning],
         )
 
     result = explore_repository_handler(
-        query="Find validation",
+        query="Find request validation",
         repo_root=str(tmp_path),
         max_turns=2,
         citation=True,
@@ -50,9 +55,7 @@ def test_mcp_handler_delegates_to_core(tmp_path: Path) -> None:
     )
 
     assert result["truncated"] is True
-    assert result["warnings"] == [
-        "implementation source not verified; returning documentation evidence"
-    ]
+    assert result["warnings"] == [warning]
     request = captured["request"]
     assert isinstance(request, ExploreRequest)
     assert request.max_turns == 2
@@ -78,7 +81,7 @@ def test_mcp_handler_returns_structured_error_for_invalid_root(tmp_path: Path) -
     settings = Settings(base_url="http://test/v1", model="test-model")
 
     result = explore_repository_handler(
-        query="Find validation",
+        query="Find request validation",
         repo_root=str(tmp_path / "missing"),
         settings=settings,
     )
@@ -119,7 +122,7 @@ model:
         )
 
     result = explore_repository_handler(
-        query="Find validation",
+        query="Find request validation",
         repo_root=str(tmp_path),
         core=fake_core,
     )
@@ -165,7 +168,7 @@ def test_mcp_handler_returns_core_normalized_citation_result(
         return explore(request, core_settings, client=client)
 
     result = explore_repository_handler(
-        query="Find validation",
+        query="Find request validation",
         repo_root=str(repo),
         settings=settings,
         core=core,

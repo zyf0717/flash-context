@@ -5,24 +5,16 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/flash-context)](https://pypi.org/project/flash-context/)
 [![License](https://img.shields.io/pypi/l/flash-context)](LICENSE)
 
-A lightweight, model-agnostic repository explorer that combines deterministic
-lookup with delegated LLM search to deliver compact, validated source evidence.
-Available as a Python CLI and Model Context Protocol (MCP) server.
+A lightweight, model-agnostic repository explorer for AI agents, available as a
+Python CLI and Model Context Protocol (MCP) server. It combines deterministic
+lookup with search and reading delegated to a utility model through an
+OpenAI-compatible endpoint, returning compact, validated file-line citations and
+source snippets.
 
-Delegate recursive, repetitive file search and reading to a utility model
-behind an OpenAI-compatible endpoint. The calling agent receives validated
-file-line citations and source snippets to use in its main task.
-
-Codebases and repositories are the current focus; the same tools explore
-documentation, configuration, and other local text files. CLI and MCP share one
-exploration core with read-only tools, path safety, and resource limits.
-Scans and regex execution are bounded; partial results report truncation.
-Citation validation checks safe paths and existing line coverage, not semantic
-relevance or minimal ranges. Citation precision depends on the explorer model.
-Implementation queries continue past documentation-only citations within the turn budget; documentation-only
-fallbacks carry incomplete-result metadata and warnings. Build outputs such as
-`dist/` remain excluded; inspect a source checkout for implementation evidence.
-Optional metadata-only trajectory logs must stay outside the inspected repository.
+CLI and MCP share a read-only core for exploring code, documentation,
+configuration, and other local text files with path safety and resource limits.
+See [safety and evidence validation](docs/architecture.md#safety-and-evidence-validation)
+for details and limitations.
 
 Inspired by [FastContext](https://arxiv.org/abs/2606.14066), a now-withdrawn paper
 on separating repository exploration from task solving, using specialized models

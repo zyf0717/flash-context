@@ -149,3 +149,10 @@ truncation, and structured endpoint/filesystem failures.
 Spec [010](../specs/010-explorer-progress-and-evidence/spec.md) refines repeated-call
 handling and documentation-only finalization without changing budgets or safety
 exclusions, and fixes MCP initialization version metadata.
+
+## 9. Exact-symbol evidence validation
+
+Spec [011](../specs/011-symbol-evidence-validation/spec.md) retains complete versus
+incomplete Python definition preflight results, constrains model citations to
+whole exact tokens, and filters unrelated read fallbacks. Public schemas and
+exit semantics remain unchanged.

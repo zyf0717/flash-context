@@ -230,7 +230,7 @@ def test_model_ranges_and_endpoint_termination(tmp_path: Path) -> None:
     with_client = ChatClient(settings, transport=httpx.MockTransport(handle))
     try:
         result = explore(
-            ExploreRequest(query="Find answer", repo_root=tmp_path),
+            ExploreRequest(query="Find the relevant answer", repo_root=tmp_path),
             settings,
             client=with_client,
         )
@@ -251,7 +251,9 @@ def test_model_ranges_and_endpoint_termination(tmp_path: Path) -> None:
         try:
             with pytest.raises(ExplorerError, match="ENDPOINT_BAD_RESPONSE"):
                 explore(
-                    ExploreRequest(query="Find answer", repo_root=tmp_path),
+                    ExploreRequest(
+                        query="Find the relevant answer", repo_root=tmp_path
+                    ),
                     settings,
                     client=client,
                 )
@@ -269,7 +271,7 @@ def test_model_ranges_and_endpoint_termination(tmp_path: Path) -> None:
     try:
         with pytest.raises(ExplorerError, match="Too many tool calls"):
             explore(
-                ExploreRequest(query="Find answer", repo_root=tmp_path),
+                ExploreRequest(query="Find the relevant answer", repo_root=tmp_path),
                 settings,
                 client=client,
             )
@@ -308,7 +310,7 @@ def test_short_preview_and_partial_completion(tmp_path: Path) -> None:
     client = ChatClient(settings, transport=httpx.MockTransport(handle))
     try:
         result = explore(
-            ExploreRequest(query="Find answer", repo_root=tmp_path),
+            ExploreRequest(query="Find the relevant answer", repo_root=tmp_path),
             settings,
             client=client,
         )
@@ -365,7 +367,7 @@ def test_cli_and_mcp_reject_internal_logging(
     assert cli.main(["explore", "--query", "Find answer", "--repo", str(tmp_path)]) == 3
     assert "CONFIG_INVALID" in capsys.readouterr().err
     result = explore_repository_handler(
-        query="Find answer", repo_root=str(tmp_path), settings=settings
+        query="Find the relevant answer", repo_root=str(tmp_path), settings=settings
     )
     assert cast(dict[str, object], result["error"])["code"] == "CONFIG_INVALID"
     assert not (tmp_path / "logs").exists()

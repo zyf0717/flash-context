@@ -62,12 +62,21 @@ EXACT_TEXT_RE = re.compile(r"[`'\"](?P<target>[^`'\"]{1,120})[`'\"]")
 TOKEN_RE = re.compile(r"\b(?P<token>[A-Za-z_][A-Za-z0-9_]*)\b")
 
 
+@dataclass(frozen=True, slots=True)
+class _DefinitionScan:
+    citations: tuple[Citation, ...]
+    status: Literal["unique", "missing", "ambiguous", "incomplete"]
+    warnings: tuple[str, ...]
+
+
 @dataclass(slots=True)
 class EvidenceState:
     reads: list[ToolObservation] = field(default_factory=list)
     citations: list[Citation] = field(default_factory=list)
     observations: dict[str, ToolObservation] = field(default_factory=dict)
     prefer_source: bool = False
+    symbol: str | None = None
+    definition_scan: _DefinitionScan | None = None
 
 
 def explore(
@@ -79,10 +88,15 @@ def explore(
     request.validate()
     repo_root = request.repo_root.resolve()
     validate_trajectory_dir(settings.traj_dir, repo_root)
+    evidence = EvidenceState(
+        prefer_source=_implementation_query(request.query),
+        symbol=_query_symbol(request.query),
+    )
     fast_result = _try_exact_fast_path(
         request,
         repo_root=repo_root,
         settings=settings,
+        evidence=evidence,
     )
     if fast_result is not None:
         return fast_result
@@ -99,12 +113,28 @@ def explore(
         limits=settings.limits,
     )
     messages = _initial_messages(request, file_sample, settings)
+    if evidence.definition_scan is not None:
+        scan = evidence.definition_scan
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    f"Local Python .py/.pyi definition scan for {evidence.symbol}: "
+                    f"{scan.status}. "
+                    "A complete missing result means zero Python definition matches; "
+                    "assignments, imports, docs, and other languages may still "
+                    "contain the symbol. Never infer a plausible home file. "
+                    "Cited lines must contain the exact case-sensitive whole symbol."
+                ),
+            }
+        )
     tools = tool_schemas()
     # A capped file sample is expected; actual scan failures must reach callers.
     warnings = list(file_sample.warnings)
+    if evidence.definition_scan is not None:
+        warnings.extend(evidence.definition_scan.warnings)
     truncated = bool(warnings)
     last_content = ""
-    evidence = EvidenceState(prefer_source=_implementation_query(request.query))
 
     try:
         for turn in range(1, effective_max_turns + 1):
@@ -186,6 +216,22 @@ def explore(
             tool_calls = _extract_tool_calls(message)
             if not tool_calls:
                 citations = _best_current_citations(evidence)
+                if evidence.symbol and content_text == NO_CITATIONS_FOUND:
+                    citations = []
+                elif evidence.symbol and not citations and turn < effective_max_turns:
+                    messages.append({"role": "assistant", "content": content_text})
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "No verified citation contains the exact query symbol. "
+                                "Search with fresh read-only calls, or return "
+                                "NO_CITATIONS_FOUND."
+                            ),
+                        }
+                    )
+                    last_content = ""
+                    continue
                 if evidence.prefer_source and _documentation_only(citations):
                     last_content = ""
                     messages.append({"role": "assistant", "content": content_text})
@@ -308,6 +354,8 @@ def explore(
                 last_content,
                 evidence.reads,
             )
+            if evidence.symbol:
+                citations = _best_current_citations(evidence)
             _append_warning_once(warnings, "max turns exceeded after partial answer")
             if request.citation and not citations:
                 _append_warning_once(
@@ -439,6 +487,9 @@ def _finalize_result(
     truncated: bool,
     warnings: list[str],
 ) -> ExploreResult:
+    if _query_symbol(request.query) and not citations:
+        answer = NO_CITATIONS_FOUND
+        _append_warning_once(warnings, "query symbol not found in verified evidence")
     citations = _merge_adjacent_citations(citations)[:MAX_FINAL_CITATIONS]
     if _implementation_query(request.query) and _documentation_only(citations):
         truncated = True
@@ -580,6 +631,7 @@ def _try_exact_fast_path(
     *,
     repo_root: Path,
     settings: Settings,
+    evidence: EvidenceState,
 ) -> ExploreResult | None:
     bare_path = request.query.strip()
     if len(bare_path) >= 2 and bare_path[0] in "`'\"" and bare_path[-1] == bare_path[0]:
@@ -610,7 +662,6 @@ def _try_exact_fast_path(
             )
     if not _is_exact_lookup(request.query):
         return None
-    evidence = EvidenceState()
     warnings: list[str] = []
     citations = _validated_citations_from_content(
         request.query,
@@ -643,6 +694,13 @@ def _try_exact_fast_path(
             target=target,
             allow_assignment=True,
         )
+        citations = _validate_citations(
+            citations,
+            repo_root=repo_root,
+            settings=settings,
+            evidence=evidence,
+            warnings=warnings,
+        )
         if citations:
             return _finalize_result(
                 request=request,
@@ -659,23 +717,75 @@ def _try_exact_fast_path(
     symbol = _extract_pathless_symbol(request.query)
     if symbol is None:
         return None
-    citation = _unique_definition_citation(
+    scan = _scan_definitions(
         repo_root=repo_root,
         settings=settings,
         symbol=symbol,
     )
-    if citation is None:
+    evidence.definition_scan = scan
+    if scan.status != "unique":
         return None
     return _finalize_result(
         request=request,
         repo_root=repo_root,
         settings=settings,
         answer="",
-        citations=[citation],
+        citations=list(scan.citations),
         turns_used=0,
         truncated=False,
         warnings=[],
     )
+
+
+def _query_symbol(query: str) -> str | None:
+    if not _is_exact_lookup(query) or extract_citations(query):
+        return None
+    path = _extract_explicit_path(query)
+    target = (
+        _extract_exact_target(query, path) if path else _extract_pathless_symbol(query)
+    )
+    if target and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", target):
+        return target
+    return None
+
+
+def _symbol_in_range(
+    citation: Citation,
+    reads: list[ToolObservation],
+    symbol: str | None,
+) -> bool:
+    if symbol is None:
+        return True
+    pattern = re.compile(rf"\b{re.escape(symbol)}\b")
+    for read in reads:
+        if not _citation_has_read_coverage(citation, [read]) or read.content is None:
+            continue
+        start, _ = _parse_line_range(read.line_range or "")
+        assert start is not None and citation.start_line is not None
+        assert citation.end_line is not None
+        lines = read.content.split("\n")
+        lines = [line + "\n" for line in lines[:-1]] + lines[-1:]
+        text = "".join(
+            lines[citation.start_line - start : citation.end_line - start + 1]
+        )
+        for match in pattern.finditer(text):
+            # A byte-capped trailing token has no verified right boundary.
+            if match.end() < len(text) or not read.truncated or text.endswith("\n"):
+                return True
+    return False
+
+
+def _eligible_reads(evidence: EvidenceState) -> list[ToolObservation]:
+    if evidence.symbol is None:
+        return evidence.reads
+    return [
+        read
+        for read in evidence.reads
+        if any(
+            _symbol_in_range(citation, [read], evidence.symbol)
+            for citation in _citations_from_reads([read])
+        )
+    ]
 
 
 def _is_exact_lookup(query: str) -> bool:
@@ -798,12 +908,12 @@ def _exact_matches_in_file(
     return citations if 0 < len(citations) <= MAX_FINAL_CITATIONS else []
 
 
-def _unique_definition_citation(
+def _scan_definitions(
     *,
     repo_root: Path,
     settings: Settings,
     symbol: str,
-) -> Citation | None:
+) -> _DefinitionScan:
     definition_pattern = rf"^\s*(?:async\s+def|def|class)\s+{re.escape(symbol)}\b"
     grep_result = repo_grep(
         repo_root=repo_root,
@@ -826,9 +936,16 @@ def _unique_definition_citation(
         for result in (grep_result, pyi_result)
         for hit in result.hits
     ]
-    if grep_result.truncated or pyi_result.truncated or len(citations) > 1:
-        return None
-    return citations[0] if len(citations) == 1 else None
+    status: Literal["unique", "missing", "ambiguous", "incomplete"]
+    if grep_result.truncated or pyi_result.truncated:
+        status = "incomplete"
+    elif len(citations) > 1:
+        status = "ambiguous"
+    else:
+        status = "unique" if citations else "missing"
+    return _DefinitionScan(
+        tuple(citations), status, tuple(grep_result.warnings + pyi_result.warnings)
+    )
 
 
 def _grep_exact_target(
@@ -919,7 +1036,8 @@ def _validate_citations(
         if normalized is None:
             continue
         if _citation_has_read_coverage(normalized, evidence.reads):
-            validated.append(normalized)
+            if _symbol_in_range(normalized, evidence.reads, evidence.symbol):
+                validated.append(normalized)
             continue
         verified = _verify_citation_by_read(
             normalized,
@@ -928,7 +1046,9 @@ def _validate_citations(
             evidence=evidence,
             warnings=warnings,
         )
-        if verified is not None:
+        if verified is not None and _symbol_in_range(
+            verified, evidence.reads, evidence.symbol
+        ):
             validated.append(verified)
     return _merge_adjacent_citations(_dedupe_citations(validated))[:MAX_FINAL_CITATIONS]
 
@@ -1045,9 +1165,10 @@ def _dedupe_citations(citations: list[Citation]) -> list[Citation]:
 
 
 def _best_current_citations(evidence: EvidenceState) -> list[Citation]:
+    reads = _eligible_reads(evidence)
     if evidence.prefer_source:
         source_reads = [
-            read for read in evidence.reads if not _documentation_path(read.path or "")
+            read for read in reads if not _documentation_path(read.path or "")
         ]
         source_citations = [
             citation
@@ -1060,7 +1181,7 @@ def _best_current_citations(evidence: EvidenceState) -> list[Citation]:
             )
     if evidence.citations:
         return evidence.citations[:MAX_FINAL_CITATIONS]
-    return _citations_from_reads(evidence.reads)
+    return _citations_from_reads(reads)
 
 
 def _citations_from_reads(observations: list[ToolObservation]) -> list[Citation]:
@@ -1112,7 +1233,7 @@ def _best_narrow_read_citation(
     evidence: EvidenceState,
     settings: Settings,
 ) -> Citation | None:
-    for citation in _citations_from_reads(evidence.reads):
+    for citation in _citations_from_reads(_eligible_reads(evidence)):
         for observation in evidence.reads:
             start, end = _parse_line_range(observation.line_range or "")
             if (
@@ -1314,6 +1435,8 @@ def _initial_messages(
                 "tool calls in the same turn. "
                 "For exact symbol, function, or class names, use repo_grep "
                 "before reading broad file ranges. "
+                "Exact-symbol citations must contain the whole case-sensitive "
+                "query token inside the cited lines. "
                 "For implementation questions, prefer implementation source over "
                 "documentation or Markdown; use documentation when requested or "
                 "needed to support the answer. Cite the smallest line ranges "

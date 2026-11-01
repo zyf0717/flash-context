@@ -12,6 +12,27 @@ CLI / MCP adapter → shared exploration core → model endpoint
                   read_file / repo_glob / repo_grep
 ```
 
+## Safety and evidence validation
+
+Scans and regex execution are bounded; partial results report truncation.
+Citation validation checks safe paths and existing line coverage. Exact-symbol
+lookups also require the case-sensitive whole token inside each cited range,
+including fallback evidence. Semantic relevance and minimal ranges remain
+model-dependent; token presence does not prove a definition. See
+[exact-symbol evidence](configuration.md#exact-symbol-evidence) for diagnostics.
+
+Implementation queries continue past documentation-only citations within the
+turn budget. Documentation-only fallbacks carry incomplete-result metadata and
+warnings. Build outputs such as `dist/` remain excluded; inspect a source
+checkout for implementation evidence. See
+[exploration progress and evidence](configuration.md#exploration-progress-and-evidence)
+for fallback behavior.
+
+Optional trajectory logs contain metadata only and must stay outside the
+inspected repository. See
+[local execution budgets and diagnostics](configuration.md#local-execution-budgets-and-diagnostics)
+for limits, truncation, and logging settings.
+
 ## Implementation status
 
 This repository has the initial Python 3.13+ implementation for spec `001`:
@@ -84,3 +105,6 @@ Spec [010](../specs/010-explorer-progress-and-evidence/spec.md) reuses duplicate
 observations while executing fresh sibling calls,
 continues implementation queries past documentation-only citations within the
 turn budget, and labels documentation-only fallback evidence as incomplete.
+
+Spec [011](../specs/011-symbol-evidence-validation/spec.md) preserves Python
+preflight outcomes and enforces exact-token evidence across symbol lookups.
