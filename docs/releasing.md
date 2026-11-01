@@ -1,10 +1,11 @@
 # Releasing
 
-The workflow is `.github/workflows/release.yml`. Pull requests and pushes to
-`main` run Ruff, mypy, and endpoint-free tests on Python 3.13 and 3.14 with the MCP
-extra, then build and check clean wheel and source installs.
+`.github/workflows/ci.yml` runs Ruff, mypy, and endpoint-free tests on Python
+3.13 and 3.14 with the MCP extra for branch pushes and pull requests to `main`,
+then builds and checks clean wheel and source installs.
 
-A `v*` tag push also runs this sequence automatically:
+A `v*` tag push triggers `.github/workflows/release.yml`, which calls the same
+CI workflow before publishing:
 
 ```text
 tests → build/check/install → TestPyPI → TestPyPI install check
@@ -51,7 +52,7 @@ Set the version in `pyproject.toml` and refresh `uv.lock`; `uv version` does
 both. Runtime `flash_context.__version__` reads the installed metadata.
 
 ```bash
-uv version 0.1.0
+uv version 0.1.1
 uv sync --locked --extra mcp
 uv run --locked ruff check .
 uv run --locked mypy
@@ -60,11 +61,14 @@ uv build
 uvx twine check --strict dist/*
 ```
 
-Commit the changes, push the commit, then push the matching version tag:
+Submit the version change through a pull request. Once it passes CI and is
+merged into `main`, update your local checkout and push the matching tag:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git switch main
+git pull --ff-only
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 The tag must exactly match `v` plus the project version (including prerelease

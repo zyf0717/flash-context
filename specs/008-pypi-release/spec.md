@@ -5,14 +5,16 @@ Status: Implemented; publishing requires one-time external Trusted Publisher set
 ## Contract
 
 - `pyproject.toml` is the single version source, including runtime `__version__`.
-- Pull requests and pushes to `main` run Ruff, mypy, and endpoint-free tests on
-  Python 3.13 and 3.14 with the MCP extra installed.
+- `.github/workflows/ci.yml` runs Ruff, mypy, and endpoint-free tests on Python
+  3.13 and 3.14 with the MCP extra installed for branch pushes and pull requests
+  to `main`. It also supports `workflow_call` for reuse by releases.
 - CI builds a source distribution and a wheel from that source distribution,
   checks metadata with Twine, and smoke-tests clean installs of both.
 - Source distributions explicitly include only package code, metadata, license,
   README, and configuration examples; local config and runtime data stay out.
-- `v*` tag pushes run the same checks and require the tag to equal `v` plus the
-  package version. Mismatches fail before publishing.
+- `.github/workflows/release.yml` runs only on `v*` tag pushes, calls `ci.yml`,
+  and requires the tag to equal `v` plus the package version. Mismatches fail
+  before publishing. Only tag builds upload distribution artifacts.
 - Successful tag builds publish to TestPyPI, install and smoke-test that exact
   version, publish the same distribution artifacts to PyPI, and install and
   smoke-test that exact version again. Any failed stage blocks dependent stages.
@@ -23,6 +25,11 @@ Status: Implemented; publishing requires one-time external Trusted Publisher set
   project distribution; dependencies resolve from production PyPI.
 - Published installations use environment variables and CLI overrides. Source
   checkout configuration discovery remains as defined by spec 006.
+- `main` requires a pull request, passing GitHub Actions checks `test (3.13)`,
+  `test (3.14)`, and `build`, an up-to-date branch, and resolved review threads.
+  Squash and rebase merges are allowed; merge commits, force pushes, and branch
+  deletion are blocked. Only the `zyf0717` user may bypass these rules. No review
+  approval count is required while there is a sole maintainer.
 
 ## Completed Tasks
 
@@ -32,3 +39,5 @@ Status: Implemented; publishing requires one-time external Trusted Publisher set
 - [x] Restrict implicit configuration discovery to source checkouts and test it.
 - [x] Add CI and sequential tag-driven publishing with index install checks.
 - [x] Add installed CLI/MCP smoke checks and document release setup.
+- [x] Share CI between branch development, pull requests, and tagged releases.
+- [x] Protect `main` with required PR checks, owner-only bypass, and linear merges.

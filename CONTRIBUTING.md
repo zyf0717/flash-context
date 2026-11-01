@@ -31,7 +31,9 @@ uv run --locked mypy
 uv run --locked pytest -m "not e2e"
 ```
 
-CI checks Python 3.13 and 3.14 and verifies clean wheel and source installs.
+`.github/workflows/ci.yml` runs on branch pushes and pull requests to `main`.
+It checks Python 3.13 and 3.14 and verifies clean wheel and source installs.
+The tag release workflow reuses these checks before publishing.
 [Releasing](docs/releasing.md) covers package checks and publication.
 
 ## Endpoint-backed tests
@@ -74,10 +76,17 @@ Report bugs with reproduction steps, expected and actual behavior, and relevant
 Python/package versions. Redact credentials and sensitive repository content
 from logs and examples.
 
-Create a branch in your fork or checkout and use Conventional Commits, such as
+Create a branch in your fork or checkout (for example, `dev/short-description`)
+and use Conventional Commits, such as
 `fix: reject symlink escapes` or `docs: clarify endpoint configuration`.
 In the pull request, explain the problem, resulting behavior, and validation
 performed. Include any relevant issue or spec links.
+
+`main` requires a pull request with passing `test (3.13)`, `test (3.14)`, and
+`build` checks, an up-to-date branch, and resolved review conversations.
+Merge with squash or rebase; merge commits, force pushes, and deletion of
+`main` are blocked. Only `zyf0717` has bypass access. No review approval count
+is required while the project has a sole maintainer.
 
 ## License
 
