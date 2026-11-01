@@ -4,6 +4,19 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+### Changed
+
+- Increase the default exploration limit from 6 to 12 turns for CLI, MCP, and
+  Python requests. Explicit turn limits still take precedence (#21).
+
+### Fixed
+
+- Move to evidence selection when shifted read ranges repeatedly add no source
+  lines. Consolidate overlapping read excerpts in selection and record its trigger
+  in metadata-only trajectories (#21).
+- Use a remaining selection turn after a token-limited completion when prior
+  read observations are available, instead of discarding them (#21).
+
 ## [0.4.1] - 2026-11-01
 
 ### Fixed

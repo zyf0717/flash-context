@@ -5,7 +5,7 @@ flash-context explore --repo PATH --query TEXT [--max-turns N] \
   [--citation | --no-citation] [--format text|json]
 ```
 
-`--repo` and a nonblank `--query` are required. Defaults are six turns,
+`--repo` and a nonblank `--query` are required. Defaults are twelve turns,
 citation-only answers, and text output. `--no-citation` retains model prose and
 rewrites accepted anchors to verified file-line labels. `--format json` returns
 the [shared result](contracts.md#result); formatting belongs to this adapter.

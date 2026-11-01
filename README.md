@@ -45,7 +45,7 @@ src/api/validation.py:42-88
 ```
 
 Use `--no-citation` for prose, `--format json` for results with snippets, or
-`--max-turns 6` to set the exploration limit. Exact path and unique symbol
+`--max-turns N` to override the 12-turn default. Exact path and unique symbol
 lookups can resolve locally without an endpoint. See the
 [CLI contract](docs/cli.md) for options,
 output schemas, and exit codes.

@@ -27,7 +27,7 @@ class Settings:
     base_url: str = ""
     model: str = ""
     api_key: str | None = None
-    max_turns: int = 6
+    max_turns: int = 12
     max_citation_lines: int = 120
     max_total_citation_lines: int = 600
     max_parse_bytes: int = 1_048_576

@@ -47,7 +47,8 @@ def test_cli_text_output_is_citation_first(
 
     def fake_explore(request: ExploreRequest, settings: Settings) -> ExploreResult:
         assert request.query == "Find validation"
-        assert settings.max_turns == 6
+        assert settings.max_turns == 12
+        assert request.max_turns == 12
         return ExploreResult(
             query=request.query,
             repo_root=str(repo),
