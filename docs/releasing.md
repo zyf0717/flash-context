@@ -1,6 +1,6 @@
 # Releasing
 
-The workflow is `.github/workflows/release.yaml`. Pull requests and pushes to
+The workflow is `.github/workflows/release.yml`. Pull requests and pushes to
 `main` run Ruff, mypy, and endpoint-free tests on Python 3.13 and 3.14 with the MCP
 extra, then build and check clean wheel and source installs.
 
@@ -35,7 +35,7 @@ Configure a GitHub Trusted Publisher separately on
 | Project name | `flash-context` | `flash-context` |
 | Owner | `zyf0717` | `zyf0717` |
 | Repository | `flash-context` | `flash-context` |
-| Workflow filename | `release.yaml` | `release.yaml` |
+| Workflow filename | `release.yml` | `release.yml` |
 | Environment | `testpypi` | `pypi` |
 
 For a new project, add a pending publisher from the account publishing page;

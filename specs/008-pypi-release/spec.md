@@ -19,7 +19,6 @@ Status: Implemented; publishing requires one-time external Trusted Publisher set
 - Publishing uses Trusted Publishing with separate `testpypi` and `pypi` GitHub
   environments. Only upload jobs receive `id-token: write`; they do not execute
   package code or build distributions.
-- Both registries must trust the exact workflow filename `release.yaml`.
 - Index checks retry briefly for index propagation. TestPyPI supplies only the
   project distribution; dependencies resolve from production PyPI.
 - Published installations use environment variables and CLI overrides. Source
