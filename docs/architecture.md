@@ -15,8 +15,11 @@ CLI / MCP adapter → shared exploration core → model endpoint
 ## Safety and evidence validation
 
 Scans and regex execution are bounded; partial results report truncation.
-Citation validation checks safe paths and existing line coverage. Semantic
-relevance, citation precision, and minimal ranges depend on the explorer model.
+Citation validation checks safe paths and existing line coverage. Exact-symbol
+lookups also require the case-sensitive whole token inside each cited range,
+including fallback evidence. Semantic relevance and minimal ranges remain
+model-dependent; token presence does not prove a definition. See
+[exact-symbol evidence](configuration.md#exact-symbol-evidence) for diagnostics.
 
 Implementation queries continue past documentation-only citations within the
 turn budget. Documentation-only fallbacks carry incomplete-result metadata and
@@ -102,3 +105,6 @@ Spec [010](../specs/010-explorer-progress-and-evidence/spec.md) reuses duplicate
 observations while executing fresh sibling calls,
 continues implementation queries past documentation-only citations within the
 turn budget, and labels documentation-only fallback evidence as incomplete.
+
+Spec [011](../specs/011-symbol-evidence-validation/spec.md) preserves Python
+preflight outcomes and enforces exact-token evidence across symbol lookups.

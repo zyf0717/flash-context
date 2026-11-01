@@ -462,3 +462,50 @@ def test_cli_documentation_fallback_keeps_evidence_and_warns(
         assert payload["raw_locations"][0]["text"] == "Overview\n"
     else:
         assert captured.out == "guide.md:1\n"
+
+
+@pytest.mark.parametrize("output_format", ["text", "json"])
+def test_cli_missing_symbol_retains_empty_result_and_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    output_format: str,
+) -> None:
+    from flash_context.agent import explore
+
+    (tmp_path / "config.py").write_text("class Existing: pass\n")
+    settings = Settings(base_url="http://test/v1", model="mock", max_turns=1)
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200, json={"choices": [{"message": {"content": "config.py:1"}}]}
+        )
+    )
+    client = ChatClient(settings, transport=transport)
+
+    def core(request: ExploreRequest, unused_settings: Settings) -> ExploreResult:
+        return explore(request, settings, client=client)
+
+    monkeypatch.setattr(cli, "explore", core)
+    try:
+        code = cli.main(
+            [
+                "explore",
+                "--repo",
+                str(tmp_path),
+                "--query",
+                "RetryConfig",
+                "--format",
+                output_format,
+            ]
+        )
+    finally:
+        client.close()
+    output = capsys.readouterr()
+    assert code == 0
+    assert "WARNING: query symbol not found in verified evidence" in output.err
+    if output_format == "json":
+        result = json.loads(output.out)
+        assert result["answer"] == "NO_CITATIONS_FOUND"
+        assert result["citations"] == result["raw_locations"] == []
+    else:
+        assert output.out == "NO_CITATIONS_FOUND\n"

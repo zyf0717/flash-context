@@ -4,6 +4,23 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-01
+
+### Fixed
+
+- Require whole, case-sensitive query tokens inside exact-symbol citations,
+  including read-derived fallback evidence. Reject plausible-home file citations
+  without matching source text and retain scoped Python preflight diagnostics.
+- Report `query symbol not found in verified evidence` when symbol lookups finish
+  without accepted evidence, rather than relying on generic termination warnings.
+
+### Migration
+
+- Exact-symbol queries may now return `NO_CITATIONS_FOUND` with empty citations
+  and snippets where previous versions returned unrelated files. Token presence
+  is lexical evidence, not proof of a definition or semantic relevance. Public
+  schemas, configuration, and CLI exit semantics are unchanged.
+
 ### Changed
 
 - Condense the README overview and move safety and evidence-validation details

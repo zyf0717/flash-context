@@ -275,7 +275,7 @@ def test_mock_endpoint_drives_glob_grep_read_loop(tmp_path: Path) -> None:
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
     result = explore(
-        ExploreRequest(query="Find validation", repo_root=repo),
+        ExploreRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -306,7 +306,7 @@ def test_chat_payload_includes_latency_controls(tmp_path: Path) -> None:
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
     explore(
-        ExploreRequest(query="Find validation", repo_root=repo),
+        ExploreRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -344,7 +344,7 @@ def test_content_with_trailing_tool_calls_stops_on_valid_citations(
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
     result = explore(
-        ExploreRequest(query="Find validation", repo_root=repo),
+        ExploreRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -379,7 +379,7 @@ def test_repeated_read_breaks_loop_with_best_evidence(tmp_path: Path) -> None:
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
     result = explore(
-        ExploreRequest(query="Find validation", repo_root=repo),
+        ExploreRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -430,7 +430,7 @@ def test_duplicate_calls_reuse_observations_and_preserve_fresh_work(
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, payloads))
     result = explore(
-        ExploreRequest(query="Find definitions", repo_root=tmp_path),
+        ExploreRequest(query="Find all definitions", repo_root=tmp_path),
         settings,
         client=client,
     )
@@ -576,7 +576,7 @@ def test_model_read_without_range_is_bounded_before_observation(
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
     result = explore(
-        ExploreRequest(query="Find answer", repo_root=repo),
+        ExploreRequest(query="Find the relevant answer", repo_root=repo),
         settings,
         client=client,
     )
@@ -614,7 +614,7 @@ def test_model_observation_content_is_capped_for_endpoint_payload(
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
     explore(
-        ExploreRequest(query="Find answer", repo_root=repo),
+        ExploreRequest(query="Find the relevant answer", repo_root=repo),
         settings,
         client=client,
     )
@@ -811,7 +811,7 @@ def test_narrow_evidence_stops_before_another_broad_read(tmp_path: Path) -> None
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
     result = explore(
-        ExploreRequest(query="Find answer", repo_root=repo),
+        ExploreRequest(query="Find `line`", repo_root=repo),
         settings,
         client=client,
     )
@@ -883,7 +883,7 @@ def test_citation_mode_strips_model_prose(tmp_path: Path) -> None:
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
     result = explore(
-        ExploreRequest(query="Find validation", repo_root=repo),
+        ExploreRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -913,7 +913,7 @@ def test_citation_prompt_uses_final_answer_block_and_normalizes_output(
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
     result = explore(
-        ExploreRequest(query="Find validation", repo_root=repo),
+        ExploreRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -1004,7 +1004,7 @@ def test_hallucinated_citation_is_rejected(tmp_path: Path) -> None:
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
     result = explore(
-        ExploreRequest(query="Find validation", repo_root=repo),
+        ExploreRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -1035,7 +1035,7 @@ def test_unseen_citation_range_is_verified_by_bounded_read(tmp_path: Path) -> No
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
     result = explore(
-        ExploreRequest(query="Find validation", repo_root=repo),
+        ExploreRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -1148,7 +1148,7 @@ def test_trajectory_log_omits_raw_location_text(tmp_path: Path) -> None:
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
     explore(
-        ExploreRequest(query="find answer", repo_root=repo),
+        ExploreRequest(query="find the relevant answer", repo_root=repo),
         settings,
         client=client,
     )
@@ -1397,3 +1397,215 @@ def test_source_reads_take_precedence_over_provisional_documentation(
         "implementation source not verified; returning documentation evidence"
         not in result.warnings
     )
+
+
+@pytest.mark.parametrize("citation", [True, False])
+@pytest.mark.parametrize("ending", ["direct", "absent", "repeat", "turn", "recover"])
+def test_symbol_evidence_cannot_fall_back_to_unrelated_reads(
+    tmp_path: Path,
+    citation: bool,
+    ending: str,
+) -> None:
+    (tmp_path / "config.py").write_text("class Existing: pass\n")
+    (tmp_path / "real.js").write_text("const RetryConfig = {};\n")
+    read = _tool_response("read", "read_file", {"path": "config.py"})
+    responses_list = {
+        "direct": [_message_response("config.py:1"), _message_response(NO_RESULT)],
+        "absent": [read, _message_response(NO_RESULT)],
+        "repeat": [read, read],
+        "turn": [read],
+        "recover": [_message_response("config.py:1"), _message_response("real.js:1")],
+    }[ending]
+    payloads: list[dict[str, object]] = []
+    settings = Settings(
+        base_url="http://test/v1", model="test", max_turns=len(responses_list)
+    )
+    client = ChatClient(
+        settings, transport=_mock_transport(iter(responses_list), payloads)
+    )
+    try:
+        result = explore(
+            ExploreRequest(query="RetryConfig", repo_root=tmp_path, citation=citation),
+            settings,
+            client=client,
+        )
+    finally:
+        client.close()
+    if ending == "recover":
+        assert result.citations == [Citation("real.js", 1, 1)]
+    else:
+        assert result.answer == NO_RESULT
+        assert not result.citations and not result.raw_locations
+        assert "query symbol not found in verified evidence" in result.warnings
+    messages = cast(list[dict[str, Any]], payloads[0]["messages"])
+    assert "scan for RetryConfig: missing" in json.dumps(messages)
+    assert "other languages" in json.dumps(messages)
+
+
+NO_RESULT = "NO_CITATIONS_FOUND"
+
+
+@pytest.mark.parametrize(
+    "text", ["RetryConfigExtra", "retryconfig", "xRetryConfig", "other"]
+)
+def test_symbol_rejection_checks_cached_cited_lines(
+    tmp_path: Path,
+    text: str,
+) -> None:
+    (tmp_path / "config.py").write_text(f"RetryConfig = 1\n{text}\n")
+    responses = iter(
+        [
+            _tool_response("read", "read_file", {"path": "config.py"}),
+            _message_response("config.py:2"),
+            _message_response(NO_RESULT),
+        ]
+    )
+    settings = Settings(base_url="http://test/v1", model="test")
+    client = ChatClient(settings, transport=_mock_transport(responses, []))
+    try:
+        result = explore(
+            ExploreRequest(query="RetryConfig", repo_root=tmp_path),
+            settings,
+            client=client,
+        )
+    finally:
+        client.close()
+    # The rejected subrange cannot be accepted just because the cached read
+    # contains the token elsewhere. The full read remains valid fallback evidence.
+    assert result.citations != [Citation("config.py", 2, 2)]
+    assert "invalid citation rejected" in result.warnings
+
+
+@pytest.mark.parametrize(
+    "filename,text",
+    [
+        ("config.py", "RetryConfig = object()\n"),
+        ("config.py", "from other import RetryConfig\n"),
+        ("guide.md", "Use RetryConfig here.\n"),
+        ("config.js", "const RetryConfig = {};\n"),
+    ],
+)
+def test_symbol_accepts_lexical_evidence_without_python_definition(
+    tmp_path: Path,
+    filename: str,
+    text: str,
+) -> None:
+    (tmp_path / filename).write_text(text)
+    settings = Settings(base_url="http://test/v1", model="test")
+    client = ChatClient(
+        settings,
+        transport=_mock_transport(iter([_message_response(f"{filename}:1")]), []),
+    )
+    try:
+        result = explore(
+            ExploreRequest(query="RetryConfig", repo_root=tmp_path),
+            settings,
+            client=client,
+        )
+    finally:
+        client.close()
+    assert result.citations == [Citation(filename, 1, 1)]
+    assert result.raw_locations[0].text == text
+
+
+@pytest.mark.parametrize("complete", [True, False])
+def test_symbol_preflight_reports_scan_completeness(
+    tmp_path: Path, complete: bool
+) -> None:
+    (tmp_path / "config.py").write_text("# padding\n" * 30)
+    settings = Settings(
+        base_url="http://test/v1", model="test", max_scan_bytes=1000 if complete else 20
+    )
+    payloads: list[dict[str, object]] = []
+    client = ChatClient(
+        settings,
+        transport=_mock_transport(iter([_message_response(NO_RESULT)]), payloads),
+    )
+    try:
+        result = explore(
+            ExploreRequest(query="RetryConfig", repo_root=tmp_path),
+            settings,
+            client=client,
+        )
+    finally:
+        client.close()
+    status = "missing" if complete else "incomplete"
+    assert f"scan for RetryConfig: {status}" in json.dumps(payloads)
+    assert result.truncated is (not complete)
+    assert ("grep scan budget exhausted" in result.warnings) is (not complete)
+
+
+@pytest.mark.parametrize("valid", [False, True])
+def test_symbol_token_limited_completion_filters_evidence(
+    tmp_path: Path, valid: bool
+) -> None:
+    (tmp_path / "config.py").write_text(
+        "RetryConfig = 1\n" if valid else "unrelated = 1\n"
+    )
+    response = _message_response("config.py:1")
+    cast(list[dict[str, Any]], response["choices"])[0]["finish_reason"] = "length"
+    settings = Settings(base_url="http://test/v1", model="test")
+    client = ChatClient(settings, transport=_mock_transport(iter([response]), []))
+    try:
+        if valid:
+            result = explore(
+                ExploreRequest(query="RetryConfig", repo_root=tmp_path),
+                settings,
+                client=client,
+            )
+            assert result.citations == [Citation("config.py", 1, 1)]
+            assert result.truncated
+        else:
+            with pytest.raises(ExplorerError, match="without evidence"):
+                explore(
+                    ExploreRequest(query="RetryConfig", repo_root=tmp_path),
+                    settings,
+                    client=client,
+                )
+    finally:
+        client.close()
+
+
+def test_symbol_cut_at_read_cap_is_unverified(tmp_path: Path) -> None:
+    (tmp_path / "config.py").write_text("RetryConfiguration = 1\n")
+    settings = Settings(
+        base_url="http://test/v1",
+        model="test",
+        max_read_bytes=len("RetryConfig"),
+        max_turns=1,
+    )
+    client = ChatClient(
+        settings,
+        transport=_mock_transport(iter([_message_response("config.py:1")]), []),
+    )
+    try:
+        result = explore(
+            ExploreRequest(query="RetryConfig", repo_root=tmp_path),
+            settings,
+            client=client,
+        )
+    finally:
+        client.close()
+    assert not result.citations
+
+
+def test_scoped_symbol_query_rejects_plausible_home_file(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/config.py").write_text("RetryConfiguration = 1\n")
+    settings = Settings(base_url="http://test/v1", model="test", max_turns=1)
+    client = ChatClient(
+        settings,
+        transport=_mock_transport(iter([_message_response("src/config.py:1")]), []),
+    )
+    try:
+        result = explore(
+            ExploreRequest(
+                query="Find `RetryConfig` in src/config.py", repo_root=tmp_path
+            ),
+            settings,
+            client=client,
+        )
+    finally:
+        client.close()
+    assert result.answer == NO_RESULT
+    assert not result.citations

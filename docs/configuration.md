@@ -145,3 +145,28 @@ repeated batch stops exploration. Resource limits and result schemas are unchang
 
 Build outputs such as `dist/` remain excluded regardless of scan budgets.
 Inspect an allowed source checkout when implementation exists only in a bundle.
+
+## Exact-symbol evidence
+
+Conservative exact-identifier lookups, including a scoped path plus identifier,
+require the case-sensitive whole query token inside every accepted cited range.
+The controller checks cached source lines or performs a safe bounded read;
+filenames, nearby lines, substrings, and byte-capped partial tokens do not qualify.
+The same check applies to read-derived fallback evidence and early termination.
+References, assignments, documentation, and other languages remain eligible;
+this lexical guarantee does not establish a definition or semantic relevance.
+Bare file previews, explicit citation requests, and semantic queries retain their
+existing behavior.
+
+Python source/stub preflight results distinguish unique, missing, ambiguous, and
+incomplete definitions. The model receives this result without a second scan.
+A complete missing result establishes zero Python definition-pattern matches,
+not repository-wide absence. Incomplete scans retain their limit diagnostics.
+
+Unsupported citations trigger focused feedback within the existing turn budget.
+An explicit `NO_CITATIONS_FOUND` ends the search without promoting previous reads.
+Normal termination without accepted evidence returns `NO_CITATIONS_FOUND`, empty
+`citations` and `raw_locations`, and `query symbol not found in verified evidence`,
+even in non-citation mode. Actual scan, turn, and token-limit diagnostics remain
+separate. CLI exit semantics and public schemas are unchanged; token exhaustion
+without usable evidence remains `ENDPOINT_BAD_RESPONSE`.
