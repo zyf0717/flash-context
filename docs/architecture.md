@@ -76,3 +76,6 @@ Out of scope for the MVP:
 - Vector database ownership or embedding/model serving.
 - MCP-first `context_search`, `context_pack`, and `context_get` tools.
 - OKF bundle output.
+
+Spec `009` hardens lexical/resolved path checks, diagnostic privacy, bounded
+local execution, conservative exact routing, and endpoint termination handling.

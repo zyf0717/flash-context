@@ -135,3 +135,10 @@ Exit criteria:
 
 - `uv run pytest`, `uv run ruff check .`, and type checks pass.
 - Daily local use is safe against accidental writes or path escapes.
+
+## 7. Explorer hardening
+
+Spec [009](../specs/009-explorer-hardening/spec.md) implements safety and
+correctness fixes before model benchmarking: external metadata-only logging,
+bounded scans/regex execution, conservative fast paths, accurate ranges and
+truncation, and structured endpoint/filesystem failures.

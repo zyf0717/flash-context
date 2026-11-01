@@ -20,12 +20,14 @@ Default denylist:
 
 ```text
 .git/**
-.env
-.env.*
+.env*
+.flash-context/**
 *.pem
 *.key
 id_rsa
 id_ed25519
+id_ecdsa
+id_dsa
 **/secrets/**
 **/.aws/**
 **/.ssh/**
@@ -121,3 +123,13 @@ Validation:
 - `pattern` is required.
 - `glob` is optional and repository-relative.
 - `max_results` cannot exceed configured `FLASH_CONTEXT_MAX_GREP_RESULTS`.
+
+## Bounded execution
+
+See [hardening spec](../../009-explorer-hardening/spec.md) for scan, pattern,
+line, batch, and verification limits. Observations may include `warnings` (a
+list of fixed diagnostic strings). Skipped unreadable files, oversized lines,
+and exhausted budgets produce `truncated: true`; incomplete search is not proof
+of absence. Direct unreadable paths return `PATH_UNREADABLE`. Deny/ignore policy
+applies to lexical and resolved paths. Enumeration prunes denied directories,
+does not follow directory symlinks, and deduplicates resolved file paths.

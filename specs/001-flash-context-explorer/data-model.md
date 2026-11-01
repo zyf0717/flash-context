@@ -17,7 +17,7 @@ Fields:
 - `max_turns: int`: Maximum model/tool iterations; default `6`.
 - `max_read_bytes: int`: Per-read content cap; default `12000`.
 - `max_grep_results: int`: Grep hit cap; default `50`.
-- `traj_dir: Path | None`: Optional run log directory. Relative paths from
+- `traj_dir: Path | None`: Optional external metadata log directory. Relative paths from
   `config.yaml` resolve from the `flash-context` project root; env overrides are
   used as supplied.
 - `ignore: list[str]`: Directory/file patterns to exclude.
@@ -175,20 +175,15 @@ Rules:
 
 ## Trajectory
 
-Optional audit log for one exploration run.
+Optional structural diagnostic log stored outside the inspected repository.
 
-Fields:
+- `request`: repository root, query length, and turn limit; no raw query.
+- `turns`: turn/tool counts, success, content lengths, and truncation flags.
+- `result`: turn/citation counts, raw-text length, and truncation, or null.
+- `error`: structured error code only, or null.
 
-- `request: ExploreRequest`
-- `turns: list[ModelTurn]`
-- `result: ExploreResult | None`
-- `error: ExplorerError | None`
-
-Rules:
-
-- Do not include denied file contents.
-- Preserve enough metadata to debug unsupported tool calls, truncation, endpoint
-  errors, and final citation quality.
+Queries, model prose/arguments, grep text, snippets and raw exception details
+are never persisted. Log write failures become warnings; see spec 009.
 
 ## ExplorerError
 

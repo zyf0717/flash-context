@@ -12,6 +12,8 @@ ErrorCode = Literal[
     "PATH_OUTSIDE_ROOT",
     "PATH_DENIED",
     "PATH_NOT_FOUND",
+    "PATH_UNREADABLE",
+    "TOOL_LIMIT_EXCEEDED",
     "TOOL_OUTPUT_TRUNCATED",
     "ENDPOINT_UNREACHABLE",
     "ENDPOINT_TIMEOUT",
@@ -115,6 +117,7 @@ class ToolObservation:
     hits: list[SearchHit] = field(default_factory=list)
     truncated: bool = False
     error: ExplorerError | None = None
+    warnings: list[str] = field(default_factory=list)
 
     def to_dict(self, *, include_content: bool = True) -> dict[str, object]:
         data: dict[str, object] = {
@@ -135,6 +138,8 @@ class ToolObservation:
             data["matches"] = self.matches
         if self.hits:
             data["hits"] = [hit.to_dict() for hit in self.hits]
+        if self.warnings:
+            data["warnings"] = self.warnings
         if self.error is not None:
             data["error"] = self.error.to_dict()
         return data

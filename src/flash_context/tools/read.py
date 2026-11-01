@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flash_context.tools.safety import PathSafety
+from flash_context.tools.safety import PathSafety, ScanBudget, ScanLimits
 from flash_context.types import ExplorerError, ToolObservation
 
 
@@ -14,6 +14,8 @@ def read_file(
     start_line: int | None = None,
     end_line: int | None = None,
     ignore: list[str] | None = None,
+    limits: ScanLimits | None = None,
+    preview: bool = False,
 ) -> ToolObservation:
     if not path:
         raise ExplorerError("INVALID_TOOL_ARGUMENTS", "path is required")
@@ -39,22 +41,43 @@ def read_file(
     total_lines = 0
     truncated = False
 
-    with resolved.open("rb") as handle:
-        for line_number, raw_line in enumerate(handle, start=1):
-            total_lines = line_number
-            if line_number < first_line:
-                continue
-            if last_line is not None and line_number > last_line:
-                break
-            if len(content_bytes) + len(raw_line) > max_bytes:
+    budget = ScanBudget(limits or ScanLimits())
+    try:
+        with resolved.open("rb") as handle:
+            line_number = 1
+            while last_line is None or line_number <= last_line:
+                budget.consume()
                 remaining = max_bytes - len(content_bytes)
-                if remaining > 0:
-                    content_bytes.extend(raw_line[:remaining])
-                actual_last = line_number
-                truncated = True
-                break
-            content_bytes.extend(raw_line)
-            actual_last = line_number
+                chunk = handle.readline(
+                    min(65536, remaining + 1) if line_number >= first_line else 65536
+                )
+                if not chunk:
+                    break
+                budget.consume(size=len(chunk))
+                total_lines = line_number
+                if line_number >= first_line:
+                    accepted = chunk[:remaining]
+                    if accepted:
+                        content_bytes.extend(accepted)
+                        actual_last = line_number
+                    if len(chunk) > remaining:
+                        truncated = True
+                        break
+                if chunk.endswith(b"\n"):
+                    line_number += 1
+            if preview and not truncated:
+                extra = handle.read(1)
+                budget.consume(size=len(extra))
+                truncated = bool(extra)
+    except OSError as exc:
+        raise ExplorerError(
+            "PATH_UNREADABLE", "Repository file could not be read"
+        ) from exc
+    except ExplorerError:
+        if actual_last is None:
+            raise
+        truncated = True
+        budget.warnings.append("read scan budget exhausted")
 
     if actual_last is None:
         raise ExplorerError(
@@ -68,10 +91,15 @@ def read_file(
         )
 
     content = content_bytes.decode("utf-8", errors="replace")
+    encoded = content.encode("utf-8")
+    if len(encoded) > max_bytes:
+        content = encoded[:max_bytes].decode("utf-8", errors="ignore")
+        truncated = True
     line_range = f"{first_line}-{actual_last}"
     return ToolObservation(
         path=rel_path,
         line_range=line_range,
         content=content,
         truncated=truncated,
+        warnings=budget.warnings,
     )
