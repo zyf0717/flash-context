@@ -4,6 +4,8 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-01
+
 ### Changed
 
 - Increase the default exploration limit from 6 to 12 turns for CLI, MCP, and
@@ -16,6 +18,11 @@ User-visible changes and migration instructions for each release.
   in metadata-only trajectories (#21).
 - Use a remaining selection turn after a token-limited completion when prior
   read observations are available, instead of discarding them (#21).
+
+### Migration
+
+- To retain the previous six-turn limit, set `FLASH_CONTEXT_MAX_TURNS=6` or pass
+  `--max-turns 6` in the CLI or `max_turns: 6` in the MCP request.
 
 ## [0.4.1] - 2026-11-01
 
