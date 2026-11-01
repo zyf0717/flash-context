@@ -128,6 +128,9 @@ Fields:
 - `start_line: int | None`
 - `end_line: int | None`
 
+- `precision: CitationPrecision | None`: inclusive line count, boundary kind, optional
+  symbol, exact-token presence and complete definition count (spec 012).
+
 Rules:
 
 - Citation paths are repository-relative.

@@ -170,3 +170,25 @@ Normal termination without accepted evidence returns `NO_CITATIONS_FOUND`, empty
 even in non-citation mode. Actual scan, turn, and token-limit diagnostics remain
 separate. CLI exit semantics and public schemas are unchanged; token exhaustion
 without usable evidence remains `ENDPOINT_BAD_RESPONSE`.
+
+## Controller-owned citation boundaries (v0.4.0)
+
+Models select `path#qualified.symbol` or `path:line` anchors; the shared core
+computes safe syntax boundaries. Public CLI/MCP file-line labels remain unchanged.
+Model ranges receive one correction opportunity within existing turns. Unselected
+read observations are no longer promoted to final evidence. Adjacent definitions
+remain separate; explicit user-requested ranges and deterministic local lookups
+retain their existing behavior.
+
+JSON citations add `precision`: inclusive `range_lines`, `boundary_kind`, nullable
+`symbol`, nullable `query_token_in_range` (exact queries only), and nullable
+`definitions_spanned` (complete named definitions contained in the range).
+Null means unavailable, not a negative result. These checks do not prove relevance.
+Unsupported/unparseable files use bounded line windows and cannot resolve symbols.
+
+Settings follow existing precedence: `explorer.max_citation_lines` (120),
+`explorer.max_total_citation_lines` (240), and `tools.max_parse_bytes` (1048576).
+Their environment names are `FLASH_CONTEXT_MAX_CITATION_LINES`,
+`FLASH_CONTEXT_MAX_TOTAL_CITATION_LINES`, and `FLASH_CONTEXT_MAX_PARSE_BYTES`.
+Parser input is local-only and separate from returned snippet byte caps.
+See spec 012 and `benchmarks/README.md` for the full behavior and opt-in trends.

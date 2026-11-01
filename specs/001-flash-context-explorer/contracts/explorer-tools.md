@@ -136,3 +136,10 @@ does not follow directory symlinks, and deduplicates resolved file paths.
 Literal file patterns avoid tree enumeration; wildcard searches begin at their
 longest literal directory prefix. Each literal component is budgeted and checked
 against deny/ignore rules before advancing, preserving ancestor pruning.
+
+## Citation precision in v0.4.0
+
+Models select symbol or single-line anchors; the controller computes boundaries
+and enforces line budgets. Distinct definitions remain separate. JSON citations
+add structural `precision` metadata. Unselected reads are no longer returned as
+fallback citations. See [spec 012](../../012-controller-owned-citation-boundaries/spec.md) for configuration, compatibility and parser coverage.

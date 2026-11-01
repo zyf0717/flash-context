@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
@@ -45,13 +45,25 @@ class ExplorerError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class CitationPrecision:
+    range_lines: int
+    boundary_kind: str
+    symbol: str | None = None
+    query_token_in_range: bool | None = None
+    definitions_spanned: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Citation:
     path: str
     start_line: int | None = None
     end_line: int | None = None
 
+    precision: CitationPrecision | None = field(default=None, compare=False)
+
     def to_dict(self) -> dict[str, object]:
         return {
+            **({"precision": asdict(self.precision)} if self.precision else {}),
             "path": self.path,
             "start_line": self.start_line,
             "end_line": self.end_line,

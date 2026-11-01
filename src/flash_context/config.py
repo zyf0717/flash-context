@@ -28,6 +28,9 @@ class Settings:
     model: str = ""
     api_key: str | None = None
     max_turns: int = 6
+    max_citation_lines: int = 120
+    max_total_citation_lines: int = 240
+    max_parse_bytes: int = 1_048_576
     max_read_bytes: int = 12_000
     max_grep_results: int = 50
     traj_dir: Path | None = None
@@ -69,6 +72,9 @@ class SettingsOverrides:
     model: str | None = None
     api_key: str | None = None
     max_turns: int | None = None
+    max_citation_lines: int | None = None
+    max_total_citation_lines: int | None = None
+    max_parse_bytes: int | None = None
     max_read_bytes: int | None = None
     max_grep_results: int | None = None
     traj_dir: Path | None | _Unset = _Unset.VALUE
@@ -177,6 +183,17 @@ def _apply_yaml(settings: Settings, path: Path, *, project_root: Path) -> Settin
 
     return replace(
         settings,
+        max_citation_lines=_int_value(
+            explorer.get("max_citation_lines", settings.max_citation_lines),
+            "max_citation_lines",
+        ),
+        max_total_citation_lines=_int_value(
+            explorer.get("max_total_citation_lines", settings.max_total_citation_lines),
+            "max_total_citation_lines",
+        ),
+        max_parse_bytes=_int_value(
+            tools.get("max_parse_bytes", settings.max_parse_bytes), "max_parse_bytes"
+        ),
         base_url=str(model.get("base_url", settings.base_url) or ""),
         model=str(model.get("model", settings.model) or ""),
         api_key=_optional_str(model.get("api_key", settings.api_key)),
@@ -250,6 +267,17 @@ def _apply_env(settings: Settings, env: Mapping[str, str | None]) -> Settings:
         max_scan_bytes=_env_int(
             env, "FLASH_CONTEXT_MAX_SCAN_BYTES", settings.max_scan_bytes
         ),
+        max_citation_lines=_env_int(
+            env, "FLASH_CONTEXT_MAX_CITATION_LINES", settings.max_citation_lines
+        ),
+        max_total_citation_lines=_env_int(
+            env,
+            "FLASH_CONTEXT_MAX_TOTAL_CITATION_LINES",
+            settings.max_total_citation_lines,
+        ),
+        max_parse_bytes=_env_int(
+            env, "FLASH_CONTEXT_MAX_PARSE_BYTES", settings.max_parse_bytes
+        ),
         base_url=env.get("FLASH_CONTEXT_BASE_URL") or settings.base_url,
         model=env.get("FLASH_CONTEXT_MODEL") or settings.model,
         api_key=env.get("FLASH_CONTEXT_API_KEY", settings.api_key),
@@ -320,6 +348,9 @@ def _validate_settings(settings: Settings) -> None:
             "CONFIG_INVALID", "tool_timeout_seconds must be finite and positive"
         )
     int_fields = {
+        "max_citation_lines": settings.max_citation_lines,
+        "max_total_citation_lines": settings.max_total_citation_lines,
+        "max_parse_bytes": settings.max_parse_bytes,
         "max_scan_bytes": settings.max_scan_bytes,
         "max_scan_entries": settings.max_scan_entries,
         "max_tool_calls_per_turn": settings.max_tool_calls_per_turn,

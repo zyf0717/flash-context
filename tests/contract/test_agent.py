@@ -267,7 +267,7 @@ def test_mock_endpoint_drives_glob_grep_read_loop(tmp_path: Path) -> None:
                 "read_file",
                 {"path": "src/api/validation.py", "start_line": 1, "end_line": 2},
             ),
-            _message_response("src/api/validation.py:1-2\nValidation entrypoint."),
+            _message_response("src/api/validation.py:1\nValidation entrypoint."),
         ]
     )
     seen_payloads: list[dict[str, object]] = []
@@ -335,7 +335,7 @@ def test_content_with_trailing_tool_calls_stops_on_valid_citations(
                 "call_2",
                 "read_file",
                 {"path": "src/api/validation.py", "start_line": 1, "end_line": 2},
-                content="src/api/validation.py:1-2",
+                content="src/api/validation.py:1",
             ),
         ]
     )
@@ -357,7 +357,7 @@ def test_content_with_trailing_tool_calls_stops_on_valid_citations(
     assert "ignored trailing tool calls after valid citations" in result.warnings
 
 
-def test_repeated_read_breaks_loop_with_best_evidence(tmp_path: Path) -> None:
+def test_repeated_read_does_not_promote_unselected_evidence(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     (repo / "src" / "api").mkdir(parents=True)
     (repo / "src" / "api" / "validation.py").write_text(
@@ -385,9 +385,7 @@ def test_repeated_read_breaks_loop_with_best_evidence(tmp_path: Path) -> None:
     )
 
     assert result.turns_used == 2
-    assert [citation.label() for citation in result.citations] == [
-        "src/api/validation.py:1-2"
-    ]
+    assert result.citations == []
     assert "repeated tool call stopped exploration" in result.warnings
 
 
@@ -817,11 +815,11 @@ def test_narrow_evidence_stops_before_another_broad_read(tmp_path: Path) -> None
     )
 
     assert len(seen_payloads) == 2
-    assert [citation.label() for citation in result.citations] == ["agent.py:5-7"]
+    assert [citation.label() for citation in result.citations] == ["agent.py:1-10"]
     assert "sufficient narrow evidence stopped broad read" in result.warnings
 
 
-def test_final_prose_without_citations_uses_best_read_evidence(tmp_path: Path) -> None:
+def test_final_prose_does_not_promote_unselected_reads(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     (repo / "src" / "flash_context").mkdir(parents=True)
     (repo / "src" / "flash_context" / "agent.py").write_text(
@@ -856,10 +854,7 @@ def test_final_prose_without_citations_uses_best_read_evidence(tmp_path: Path) -
         client=client,
     )
 
-    assert result.answer.splitlines() == [
-        "src/flash_context/agent.py:1-120",
-        "src/flash_context/agent.py:352-365",
-    ]
+    assert result.answer == "NO_CITATIONS_FOUND"
     assert "final answer did not include valid citations" in result.warnings
 
 
@@ -873,8 +868,7 @@ def test_citation_mode_strips_model_prose(tmp_path: Path) -> None:
     responses: Iterator[dict[str, object]] = iter(
         [
             _message_response(
-                "Here is the answer:\n\n"
-                "src/api/validation.py:1-2\n\n"
+                "Here is the answer:\n\nsrc/api/validation.py:1\n\n"
                 "This is where validation happens."
             )
         ]
@@ -904,7 +898,7 @@ def test_citation_prompt_uses_final_answer_block_and_normalizes_output(
     responses: Iterator[dict[str, object]] = iter(
         [
             _message_response(
-                "Done.\n<final_answer>\nsrc/api/validation.py:1-2\n</final_answer>"
+                "Done.\n<final_answer>\nsrc/api/validation.py:1\n</final_answer>"
             )
         ]
     )
@@ -927,41 +921,18 @@ def test_citation_prompt_uses_final_answer_block_and_normalizes_output(
     ]
 
 
-def test_final_citations_merge_and_raw_locations_use_merged_range(
-    tmp_path: Path,
-) -> None:
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    (repo / "a.py").write_text(
-        "".join(f"line {line}\n" for line in range(1, 11)),
-        encoding="utf-8",
-    )
-    responses: Iterator[dict[str, object]] = iter(
-        [
-            _message_response(
-                "<final_answer>\na.py:1-3\na.py:4-8\na.py:7-10\n</final_answer>"
-            )
-        ]
-    )
-    settings = Settings(base_url="http://test/v1", model="test-model")
-    client = ChatClient(settings, transport=_mock_transport(responses, []))
-
-    result = explore(
-        ExploreRequest(query="Find lines", repo_root=repo),
+def test_final_citations_preserve_adjacent_definitions(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text("def a(): pass\ndef b(): pass\n")
+    settings = Settings(base_url="http://test/v1", model="mock")
+    client = ChatClient(
         settings,
-        client=client,
+        transport=_mock_transport(iter([_message_response("a.py#a\na.py#b")]), []),
     )
-
-    assert result.answer == "a.py:1-10"
-    assert [citation.label() for citation in result.citations] == ["a.py:1-10"]
-    assert result.raw_locations == [
-        RawLocation(
-            path="a.py",
-            start_line=1,
-            end_line=10,
-            text="".join(f"line {line}\n" for line in range(1, 11)),
-        )
-    ]
+    result = explore(
+        ExploreRequest("Where are the functions?", tmp_path), settings, client=client
+    )
+    assert result.answer == "a.py:1\na.py:2"
+    assert len(result.raw_locations) == 2
 
 
 def test_raw_location_truncation_is_reported(tmp_path: Path) -> None:
@@ -999,7 +970,7 @@ def test_hallucinated_citation_is_rejected(tmp_path: Path) -> None:
     repo.mkdir()
     settings = Settings(base_url="http://test/v1", model="test-model")
     responses: Iterator[dict[str, object]] = iter(
-        [_message_response("src/missing.py:1-10")]
+        [_message_response("src/missing.py:1"), _message_response("NO_CITATIONS_FOUND")]
     )
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
@@ -1014,7 +985,7 @@ def test_hallucinated_citation_is_rejected(tmp_path: Path) -> None:
     assert "invalid citation rejected" in result.warnings
 
 
-def test_unseen_citation_range_is_verified_by_bounded_read(tmp_path: Path) -> None:
+def test_unparsed_line_anchor_uses_bounded_window(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     (repo / "src" / "api").mkdir(parents=True)
     (repo / "src" / "api" / "validation.py").write_text(
@@ -1028,7 +999,7 @@ def test_unseen_citation_range_is_verified_by_bounded_read(tmp_path: Path) -> No
                 "read_file",
                 {"path": "src/api/validation.py", "start_line": 1, "end_line": 2},
             ),
-            _message_response("src/api/validation.py:50-60"),
+            _message_response("src/api/validation.py:50"),
         ]
     )
     settings = Settings(base_url="http://test/v1", model="test-model")
@@ -1041,7 +1012,7 @@ def test_unseen_citation_range_is_verified_by_bounded_read(tmp_path: Path) -> No
     )
 
     assert [citation.label() for citation in result.citations] == [
-        "src/api/validation.py:50-60"
+        "src/api/validation.py:45-55"
     ]
 
 
@@ -1092,9 +1063,9 @@ def test_max_turns_returns_partial_answer_when_model_provided_content(
         client=client,
     )
 
-    assert result.answer == "validation.py:1-2"
-    assert result.citations[0].path == "validation.py"
-    assert result.warnings == ["max turns exceeded after partial answer"]
+    assert result.answer == "NO_CITATIONS_FOUND"
+    assert result.citations == []
+    assert "max turns exceeded after partial answer" in result.warnings
 
 
 def test_model_observation_payload_numbers_read_content() -> None:
@@ -1368,7 +1339,7 @@ def test_exact_documentation_path_stays_endpoint_free(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("citation", [False, True])
-def test_source_reads_take_precedence_over_provisional_documentation(
+def test_unselected_source_reads_do_not_replace_documentation(
     tmp_path: Path,
     citation: bool,
 ) -> None:
@@ -1392,10 +1363,10 @@ def test_source_reads_take_precedence_over_provisional_documentation(
         settings,
         client=ChatClient(settings, transport=_mock_transport(responses, [])),
     )
-    assert result.answer == "handler.py:1"
+    assert result.answer == "guide.md:1"
     assert (
         "implementation source not verified; returning documentation evidence"
-        not in result.warnings
+        in result.warnings
     )
 
 

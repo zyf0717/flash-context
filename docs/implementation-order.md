@@ -156,3 +156,8 @@ Spec [011](../specs/011-symbol-evidence-validation/spec.md) retains complete ver
 incomplete Python definition preflight results, constrains model citations to
 whole exact tokens, and filters unrelated read fallbacks. Public schemas and
 exit semantics remain unchanged.
+
+## 10. Controller-owned citation boundaries
+
+Spec 012 adds bundled parsing, anchor validation, precision budgets and metadata,
+then a pinned opt-in quality benchmark. CLI and MCP continue using the shared core.

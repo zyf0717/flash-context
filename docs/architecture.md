@@ -17,8 +17,8 @@ CLI / MCP adapter → shared exploration core → model endpoint
 Scans and regex execution are bounded; partial results report truncation.
 Citation validation checks safe paths and existing line coverage. Exact-symbol
 lookups also require the case-sensitive whole token inside each cited range,
-including fallback evidence. Semantic relevance and minimal ranges remain
-model-dependent; token presence does not prove a definition. See
+including fallback evidence. Semantic relevance remains model-dependent; syntax boundaries are
+controller-owned; token presence does not prove a definition. See
 [exact-symbol evidence](configuration.md#exact-symbol-evidence) for diagnostics.
 
 Implementation queries continue past documentation-only citations within the
@@ -108,3 +108,10 @@ turn budget, and labels documentation-only fallback evidence as incomplete.
 
 Spec [011](../specs/011-symbol-evidence-validation/spec.md) preserves Python
 preflight outcomes and enforces exact-token evidence across symbol lookups.
+
+## Citation precision in v0.4.0
+
+Models select symbol or single-line anchors; the controller computes boundaries
+and enforces line budgets. Distinct definitions remain separate. JSON citations
+add structural `precision` metadata. Unselected reads are no longer returned as
+fallback citations. See [spec 012](../specs/012-controller-owned-citation-boundaries/spec.md) for configuration, compatibility and parser coverage.

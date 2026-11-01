@@ -75,7 +75,22 @@ def main() -> None:
                 "sample.py:1-2" if end_line == 2 else "sample.py:1"
             )
             assert payload["citations"] == [
-                {"path": "sample.py", "start_line": 1, "end_line": end_line}
+                {
+                    "path": "sample.py",
+                    "start_line": 1,
+                    "end_line": end_line,
+                    "precision": {
+                        "range_lines": end_line,
+                        "boundary_kind": "preview"
+                        if query == "sample.py"
+                        else "explicit_range"
+                        if ":" in query
+                        else "exact_match",
+                        "symbol": None,
+                        "query_token_in_range": None,
+                        "definitions_spanned": None,
+                    },
+                }
             ]
             assert payload["raw_locations"] == [
                 {

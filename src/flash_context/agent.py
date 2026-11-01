@@ -7,12 +7,14 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from flash_context.citations import CitationResolver, render_answer
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
 from flash_context.logging import TrajectoryRecorder, validate_trajectory_dir
 from flash_context.tools import read_file, repo_glob, repo_grep
 from flash_context.types import (
     Citation,
+    CitationPrecision,
     ExploreRequest,
     ExplorerError,
     ExploreResult,
@@ -24,7 +26,7 @@ from flash_context.types import (
 ToolName = Literal["read_file", "repo_glob", "repo_grep"]
 
 ALLOWED_TOOLS: set[ToolName] = {"read_file", "repo_glob", "repo_grep"}
-MAX_FINAL_CITATIONS = 5
+MAX_FINAL_CITATIONS = 12
 NO_CITATIONS_FOUND = "NO_CITATIONS_FOUND"
 CITATION_RE = re.compile(
     r"(?P<path>(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+)"
@@ -77,6 +79,7 @@ class EvidenceState:
     prefer_source: bool = False
     symbol: str | None = None
     definition_scan: _DefinitionScan | None = None
+    resolver: CitationResolver | None = None
 
 
 def explore(
@@ -100,6 +103,7 @@ def explore(
     )
     if fast_result is not None:
         return fast_result
+    evidence.resolver = CitationResolver(repo_root, settings, evidence.symbol)
     settings.require_endpoint()
     effective_max_turns = min(request.max_turns, settings.max_turns)
     recorder = TrajectoryRecorder(settings.traj_dir, request)
@@ -177,6 +181,7 @@ def explore(
                 return result
             recorder.record_model_turn(turn, message)
             needs_source = False
+            repair_feedback: str | None = None
             content_text = str(message.get("content") or "").strip()
             if content_text:
                 last_content = content_text
@@ -194,7 +199,7 @@ def explore(
                     )
                 if needs_source:
                     last_content = ""
-                if citations and not needs_source:
+                if citations and not needs_source and not evidence.resolver.feedback:
                     if _message_has_tool_calls(message):
                         _append_warning_once(
                             warnings,
@@ -214,9 +219,26 @@ def explore(
                     return result
 
             tool_calls = _extract_tool_calls(message)
+            resolver = evidence.resolver
+            assert resolver is not None
+            if resolver.feedback:
+                evidence.citations = resolver.limit(evidence.citations + citations)
+                feedback = " ".join(dict.fromkeys(resolver.feedback))
+                if not resolver.repaired and turn < effective_max_turns:
+                    resolver.repaired = True
+                    if not tool_calls:
+                        messages.append({"role": "assistant", "content": content_text})
+                        messages.append({"role": "user", "content": feedback})
+                        last_content = ""
+                        continue
+                    repair_feedback = feedback
+                else:
+                    _append_warning_once(warnings, "citation precision limits reached")
+                    truncated = True
+                last_content = ""
             if not tool_calls:
                 citations = _best_current_citations(evidence)
-                if evidence.symbol and content_text == NO_CITATIONS_FOUND:
+                if content_text == NO_CITATIONS_FOUND:
                     citations = []
                 elif evidence.symbol and not citations and turn < effective_max_turns:
                     messages.append({"role": "assistant", "content": content_text})
@@ -246,7 +268,7 @@ def explore(
                     request=request,
                     repo_root=repo_root,
                     settings=settings,
-                    answer="" if needs_source else content_text,
+                    answer="" if needs_source or resolver.feedback else content_text,
                     citations=citations,
                     turns_used=turn,
                     truncated=truncated,
@@ -341,6 +363,8 @@ def explore(
                         ),
                     }
                 )
+            if repair_feedback:
+                messages.append({"role": "user", "content": repair_feedback})
             if needs_source:
                 messages.append(_source_feedback())
         if last_content:
@@ -350,10 +374,7 @@ def explore(
                 settings=settings,
                 evidence=evidence,
                 warnings=warnings,
-            ) or _citations_from_observations(
-                last_content,
-                evidence.reads,
-            )
+            ) or _best_current_citations(evidence)
             if evidence.symbol:
                 citations = _best_current_citations(evidence)
             _append_warning_once(warnings, "max turns exceeded after partial answer")
@@ -490,7 +511,24 @@ def _finalize_result(
     if _query_symbol(request.query) and not citations:
         answer = NO_CITATIONS_FOUND
         _append_warning_once(warnings, "query symbol not found in verified evidence")
-    citations = _merge_adjacent_citations(citations)[:MAX_FINAL_CITATIONS]
+    citations = (
+        _dedupe_citations(citations)
+        if any(c.precision is not None for c in citations)
+        else _merge_adjacent_citations(citations)
+    )[:MAX_FINAL_CITATIONS]
+    if turns_used == 0:
+        kind = "explicit_range" if extract_citations(request.query) else "exact_match"
+        if request.query.strip("`\"' ") == (citations[0].path if citations else ""):
+            kind = "preview"
+        citations = [
+            replace(
+                c,
+                precision=CitationPrecision(
+                    (c.end_line or 0) - (c.start_line or 1) + 1, kind
+                ),
+            )
+            for c in citations
+        ]
     if _implementation_query(request.query) and _documentation_only(citations):
         truncated = True
         answer = _citation_text(citations)
@@ -498,8 +536,11 @@ def _finalize_result(
             warnings,
             "implementation source not verified; returning documentation evidence",
         )
-    if request.citation or (not answer and citations):
-        answer = _citation_text(citations)
+    answer = (
+        _citation_text(citations)
+        if request.citation or not citations or not answer
+        else render_answer(answer, citations)
+    )
     raw_locations = _extract_raw_locations(
         citations,
         repo_root=repo_root,
@@ -1005,6 +1046,13 @@ def _validated_citations_from_content(
     evidence: EvidenceState,
     warnings: list[str],
 ) -> list[Citation]:
+    if evidence.resolver is not None:
+        citations = evidence.resolver.parse(content)
+        for warning in evidence.resolver.warnings:
+            _append_warning_once(warnings, warning)
+        if evidence.resolver.feedback:
+            _append_warning_once(warnings, "invalid citation rejected")
+        return citations
     parsed = extract_citations(content)
     if not parsed:
         return []
@@ -1165,23 +1213,24 @@ def _dedupe_citations(citations: list[Citation]) -> list[Citation]:
 
 
 def _best_current_citations(evidence: EvidenceState) -> list[Citation]:
-    reads = _eligible_reads(evidence)
-    if evidence.prefer_source:
-        source_reads = [
-            read for read in reads if not _documentation_path(read.path or "")
-        ]
-        source_citations = [
-            citation
-            for citation in evidence.citations
-            if not _documentation_path(citation.path)
-        ]
-        if source_citations or source_reads:
-            return source_citations[:MAX_FINAL_CITATIONS] or _citations_from_reads(
-                source_reads
-            )
-    if evidence.citations:
-        return evidence.citations[:MAX_FINAL_CITATIONS]
-    return _citations_from_reads(reads)
+    if evidence.resolver is not None:
+        resolver = evidence.resolver
+        if evidence.citations:
+            return resolver.limit(evidence.citations)
+        candidates: list[Citation] = []
+        if evidence.symbol:
+            for read in _eligible_reads(evidence):
+                start, _ = _parse_line_range(read.line_range or "")
+                if start is None or read.path is None:
+                    continue
+                for offset, text in enumerate((read.content or "").splitlines()):
+                    if re.search(rf"\b{re.escape(evidence.symbol)}\b", text):
+                        citation = resolver.resolve(read.path, line=start + offset)
+                        if citation is not None:
+                            candidates.append(citation)
+                            break
+        return resolver.limit(candidates)
+    return evidence.citations
 
 
 def _citations_from_reads(observations: list[ToolObservation]) -> list[Citation]:
@@ -1359,26 +1408,6 @@ def _citation_from_match(match: re.Match[str]) -> Citation:
     return Citation(path=path, start_line=start, end_line=end)
 
 
-def _citations_from_observations(
-    answer: str,
-    observations: list[ToolObservation],
-) -> list[Citation]:
-    citations: list[Citation] = []
-    seen: set[tuple[str, int | None, int | None]] = set()
-    for observation in observations:
-        if observation.path is None or observation.line_range is None:
-            continue
-        if observation.path not in answer and Path(observation.path).name not in answer:
-            continue
-        start, end = _parse_line_range(observation.line_range)
-        key = (observation.path, start, end)
-        if key in seen:
-            continue
-        seen.add(key)
-        citations.append(Citation(observation.path, start, end))
-    return citations[:MAX_FINAL_CITATIONS]
-
-
 def _parse_line_range(line_range: str) -> tuple[int | None, int | None]:
     start_text, _, end_text = line_range.partition("-")
     try:
@@ -1409,12 +1438,13 @@ def _initial_messages(
     )
     output_contract = (
         "Final answer format is strict: end with a <final_answer> block "
-        "containing only 1-5 repository-relative path:start-end citation "
+        "containing only 1-12 repository-relative "
+        "path#qualified.symbol or path:line anchor "
         "lines, then </final_answer>. Do not include prose, Markdown, code "
         "blocks, bullets, or explanations inside the block. If no citation "
         "is supported, return exactly NO_CITATIONS_FOUND."
         if request.citation
-        else "Final answer may include concise prose with file-line citations."
+        else "Return concise prose and <final_answer> path#symbol or path:line anchors."
     )
     return [
         {
@@ -1422,7 +1452,10 @@ def _initial_messages(
             "content": (
                 "You answer focused questions about a local repository. "
                 "Use only the provided read-only tools. Return compact "
-                "repository-relative citations as path:start-end. Use the "
+                "repository-relative anchors as path#qualified.symbol or path:line. "
+                "Never choose end lines or output ranges; "
+                "local code computes boundaries. "
+                "Use the "
                 "listed repository paths as grounding and do not invent paths. "
                 "Tool path arguments must be repository-relative with no "
                 "leading slash and must not include the repository directory "

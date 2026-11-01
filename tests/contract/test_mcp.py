@@ -152,7 +152,7 @@ def test_mcp_handler_returns_core_normalized_citation_result(
                             "role": "assistant",
                             "content": (
                                 "Here is the answer:\n"
-                                "src/api/validation.py:1-2\n"
+                                "src/api/validation.py:1\n"
                                 "Validation entrypoint."
                             ),
                         }
@@ -180,6 +180,13 @@ def test_mcp_handler_returns_core_normalized_citation_result(
             "path": "src/api/validation.py",
             "start_line": 1,
             "end_line": 2,
+            "precision": {
+                "range_lines": 2,
+                "boundary_kind": "definition",
+                "symbol": "validate_request",
+                "query_token_in_range": None,
+                "definitions_spanned": 1,
+            },
         }
     ]
     assert result["raw_locations"] == [

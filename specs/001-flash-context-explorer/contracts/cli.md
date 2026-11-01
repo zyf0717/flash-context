@@ -158,3 +158,10 @@ Normal termination without accepted evidence returns `NO_CITATIONS_FOUND`, empty
 even in non-citation mode. Actual scan, turn, and token-limit diagnostics remain
 separate. CLI exit semantics and public schemas are unchanged; token exhaustion
 without usable evidence remains `ENDPOINT_BAD_RESPONSE`.
+
+## Citation precision in v0.4.0
+
+Models select symbol or single-line anchors; the controller computes boundaries
+and enforces line budgets. Distinct definitions remain separate. JSON citations
+add structural `precision` metadata. Unselected reads are no longer returned as
+fallback citations. See [spec 012](../../012-controller-owned-citation-boundaries/spec.md) for configuration, compatibility and parser coverage.

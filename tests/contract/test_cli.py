@@ -241,7 +241,18 @@ def test_cli_exact_fast_path_json_reports_zero_turns(
     assert payload["answer"] == "agent.py:1"
     assert payload["turns_used"] == 0
     assert payload["citations"] == [
-        {"path": "agent.py", "start_line": 1, "end_line": 1}
+        {
+            "path": "agent.py",
+            "start_line": 1,
+            "end_line": 1,
+            "precision": {
+                "range_lines": 1,
+                "boundary_kind": "exact_match",
+                "symbol": None,
+                "query_token_in_range": None,
+                "definitions_spanned": None,
+            },
+        }
     ]
 
 
@@ -343,7 +354,7 @@ def test_cli_empty_tool_budget_failure_exits_six(
     }
     responses: Iterator[dict[str, object]]
     if failure == "verification":
-        responses = iter([{"choices": [{"message": {"content": "a.py:10"}}]}])
+        responses = iter([{"choices": [{"message": {"content": "a.py:10"}}]}, final])
     else:
         tool = "repo_grep" if failure == "grep" else "read_file"
         arguments = (

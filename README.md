@@ -78,3 +78,10 @@ See [MCP integration](docs/mcp.md) for editor configuration and source launches.
 ## License
 
 [Apache License 2.0](LICENSE).
+
+## Citation precision in v0.4.0
+
+Models select symbol or single-line anchors; the controller computes boundaries
+and enforces line budgets. Distinct definitions remain separate. JSON citations
+add structural `precision` metadata. Unselected reads are no longer returned as
+fallback citations. See [configuration](docs/configuration.md) for configuration, compatibility and parser coverage.

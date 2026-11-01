@@ -218,7 +218,7 @@ def test_model_ranges_and_endpoint_termination(tmp_path: Path) -> None:
                     }
                 ],
             },
-            {"content": "a.txt:1-2"},
+            {"content": "a.txt:1"},
         ]
     )
     payloads: list[dict[str, object]] = []
@@ -237,7 +237,7 @@ def test_model_ranges_and_endpoint_termination(tmp_path: Path) -> None:
     finally:
         with_client.close()
     assert not result.truncated
-    assert result.answer == "a.txt:1-2"
+    assert result.answer == "a.txt:1-3"
     for message in ({"content": None}, {"content": "", "tool_calls": []}):
         client = ChatClient(
             settings,
@@ -298,7 +298,7 @@ def test_short_preview_and_partial_completion(tmp_path: Path) -> None:
                     ],
                 }
             },
-            {"message": {"content": None}, "finish_reason": "length"},
+            {"message": {"content": "a.txt:1"}, "finish_reason": "length"},
         ]
     )
     sent: list[dict[str, object]] = []

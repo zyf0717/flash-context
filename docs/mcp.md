@@ -92,3 +92,10 @@ Repeated calls reuse observations while fresh sibling calls execute; an entirely
 repeated batch stops exploration. Resource limits and result schemas are unchanged.
 
 MCP initialization reports the installed flash-context package version.
+
+## Citation precision in v0.4.0
+
+Models select symbol or single-line anchors; the controller computes boundaries
+and enforces line budgets. Distinct definitions remain separate. JSON citations
+add structural `precision` metadata. Unselected reads are no longer returned as
+fallback citations. See [spec 012](../specs/012-controller-owned-citation-boundaries/spec.md) for configuration, compatibility and parser coverage.

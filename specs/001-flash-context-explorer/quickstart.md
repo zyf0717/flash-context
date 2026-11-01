@@ -207,3 +207,10 @@ contents in the error payload.
 Implementation questions continue past documentation-only citations within the
 turn budget. Documentation-only fallbacks retain evidence with `truncated: true`
 and a warning; partial cited results still exit 0. Build outputs remain excluded.
+
+## Citation precision in v0.4.0
+
+Models select symbol or single-line anchors; the controller computes boundaries
+and enforces line budgets. Distinct definitions remain separate. JSON citations
+add structural `precision` metadata. Unselected reads are no longer returned as
+fallback citations. See [spec 012](../012-controller-owned-citation-boundaries/spec.md) for configuration, compatibility and parser coverage.

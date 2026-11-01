@@ -22,10 +22,7 @@ def test_fixture_repository_returns_validation_citation() -> None:
                 "repo_grep",
                 {"pattern": "validate_request", "glob": "**/*.py"},
             ),
-            _message_response(
-                "src/api/validation.py:1-4\n"
-                "tests/test_validation.py:4-5"
-            ),
+            _message_response("src/api/validation.py:1\ntests/test_validation.py:4"),
         ]
     )
     client = ChatClient(settings, transport=_mock_transport(responses))

@@ -4,6 +4,25 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-01
+
+### Added
+
+- Bundled parsers for controller-owned symbol and line-anchor boundaries, with
+  citation precision metadata and an opt-in pinned quality benchmark.
+- Configurable per-citation, total-line and parser-byte limits (120, 240 and
+  1 MiB by default), supporting the existing configuration precedence.
+
+### Migration
+
+- Models must propose symbol or single-line anchors; model-selected ranges receive
+  bounded correction feedback. Public line labels remain unchanged. Adjacent
+  definitions remain separate, and the final citation cap increases to twelve.
+- Unselected read observations no longer become final citations. Consumers should
+  accept the additive precision object. Explicit user ranges retain old behavior.
+- Parser dependencies ship with installation; exploration does not download grammars.
+
+
 ## [0.3.2] - 2026-11-01
 
 ### Fixed
