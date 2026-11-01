@@ -6,6 +6,8 @@ User-visible changes and migration instructions for each release.
 
 ### Fixed
 
+- Clarify exploration and evidence-selection prompts to cite code that performs
+  the requested behavior; comments and strings remain supporting evidence (#18).
 - Consolidate symbol preflight into the leading system message for strict chat
   templates; preserve missing-symbol diagnostics and genuine endpoint errors.
 - Normalize model ranges to complete syntax units with atomic budget checks and
