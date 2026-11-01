@@ -1,5 +1,10 @@
 # flash-context
 
+[![CI](https://github.com/zyf0717/flash-context/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/zyf0717/flash-context/actions/workflows/release.yml)
+[![PyPI version](https://img.shields.io/pypi/v/flash-context)](https://pypi.org/project/flash-context/)
+[![Python versions](https://img.shields.io/pypi/pyversions/flash-context)](https://pypi.org/project/flash-context/)
+[![License](https://img.shields.io/pypi/l/flash-context)](LICENSE)
+
 Read-only context exploration and retrieval for AI agents,
 available as a Python CLI and Model Context Protocol (MCP) server.
 
