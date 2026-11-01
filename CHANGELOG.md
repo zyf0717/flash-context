@@ -4,6 +4,8 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-01
+
 ### Fixed
 
 - Resolve bare file-path queries locally with bounded previews and find unique
