@@ -1,4 +1,4 @@
-explorer:
+search:
   max_turns: 12
   max_citation_lines: 120
   max_total_citation_lines: 600

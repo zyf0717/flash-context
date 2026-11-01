@@ -11,7 +11,7 @@ from flash_context.config import Settings
 from flash_context.tools import read_file, repo_glob, repo_grep
 from flash_context.types import (
     Diagnostic,
-    ExplorerError,
+    SearchError,
     ToolCall,
     ToolName,
     ToolObservation,
@@ -109,29 +109,29 @@ def _tool_call_fingerprint(tool_call: ToolCall) -> str:
 def _extract_message(response: dict[str, Any]) -> dict[str, Any]:
     choices = response.get("choices")
     if not isinstance(choices, list) or not choices:
-        raise ExplorerError(
+        raise SearchError(
             "ENDPOINT_BAD_RESPONSE",
             "Endpoint response has no choices",
         )
     first = choices[0]
     if not isinstance(first, dict):
-        raise ExplorerError(
+        raise SearchError(
             "ENDPOINT_BAD_RESPONSE", "Endpoint choice must be an object"
         )
     message = first.get("message")
     if not isinstance(message, dict):
-        raise ExplorerError(
+        raise SearchError(
             "ENDPOINT_BAD_RESPONSE", "Endpoint message must be an object"
         )
     content = message.get("content")
     if content is not None and not isinstance(content, str):
-        raise ExplorerError("ENDPOINT_BAD_RESPONSE", "Message content must be text")
+        raise SearchError("ENDPOINT_BAD_RESPONSE", "Message content must be text")
     if (
         (not content or not content.strip())
         and not message.get("tool_calls")
         and first.get("finish_reason") != "length"
     ):
-        raise ExplorerError(
+        raise SearchError(
             "ENDPOINT_BAD_RESPONSE", "Endpoint returned an empty message"
         )
     return cast(dict[str, Any], message)
@@ -142,7 +142,7 @@ def _extract_tool_calls(message: dict[str, Any]) -> list[ToolCall]:
     if raw_calls is None:
         return []
     if not isinstance(raw_calls, list):
-        raise ExplorerError("ENDPOINT_BAD_RESPONSE", "tool_calls must be a list")
+        raise SearchError("ENDPOINT_BAD_RESPONSE", "tool_calls must be a list")
     calls: list[ToolCall] = []
     for raw_call in raw_calls:
         calls.append(_parse_tool_call(raw_call))
@@ -151,36 +151,36 @@ def _extract_tool_calls(message: dict[str, Any]) -> list[ToolCall]:
 
 def _parse_tool_call(raw_call: object) -> ToolCall:
     if not isinstance(raw_call, dict):
-        raise ExplorerError("ENDPOINT_BAD_RESPONSE", "tool call must be an object")
+        raise SearchError("ENDPOINT_BAD_RESPONSE", "tool call must be an object")
     call_id = raw_call.get("id")
     function = raw_call.get("function")
     if not isinstance(call_id, str) or not isinstance(function, dict):
-        raise ExplorerError(
+        raise SearchError(
             "ENDPOINT_BAD_RESPONSE",
             "tool call is missing id/function",
         )
     name = function.get("name")
     if not isinstance(name, str) or name not in ALLOWED_TOOLS:
-        raise ExplorerError(
+        raise SearchError(
             "UNSUPPORTED_TOOL_CALL",
             "Endpoint requested an unsupported tool",
             details={"tool": name or "<missing>"},
         )
     raw_arguments = function.get("arguments", "{}")
     if not isinstance(raw_arguments, str):
-        raise ExplorerError(
+        raise SearchError(
             "ENDPOINT_BAD_RESPONSE",
             "tool arguments must be JSON text",
         )
     try:
         arguments = json.loads(raw_arguments)
     except json.JSONDecodeError as exc:
-        raise ExplorerError(
+        raise SearchError(
             "ENDPOINT_BAD_RESPONSE",
             "tool arguments must be valid JSON",
         ) from exc
     if not isinstance(arguments, dict):
-        raise ExplorerError(
+        raise SearchError(
             "ENDPOINT_BAD_RESPONSE",
             "tool arguments must be an object",
         )
@@ -322,7 +322,7 @@ def _execute_tool_call(
                 ignore=settings.ignore,
                 limits=settings.limits,
             )
-    except ExplorerError as exc:
+    except SearchError as exc:
         observation = ToolObservation.from_error(exc, tool_call_id=tool_call.id)
         if exc.code == "TOOL_LIMIT_EXCEEDED":
             observation.truncated = True
@@ -334,7 +334,7 @@ def _execute_tool_call(
 def _required_str(arguments: dict[str, object], key: str) -> str:
     value = arguments.get(key)
     if not isinstance(value, str) or not value:
-        raise ExplorerError("INVALID_TOOL_ARGUMENTS", f"{key} is required")
+        raise SearchError("INVALID_TOOL_ARGUMENTS", f"{key} is required")
     return value
 
 
@@ -343,7 +343,7 @@ def _optional_str(arguments: dict[str, object], key: str) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise ExplorerError("INVALID_TOOL_ARGUMENTS", f"{key} must be a string")
+        raise SearchError("INVALID_TOOL_ARGUMENTS", f"{key} must be a string")
     return value
 
 
@@ -352,7 +352,7 @@ def _optional_int(arguments: dict[str, object], key: str) -> int | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int):
-        raise ExplorerError("INVALID_TOOL_ARGUMENTS", f"{key} must be an integer")
+        raise SearchError("INVALID_TOOL_ARGUMENTS", f"{key} must be an integer")
     return value
 
 
@@ -364,7 +364,7 @@ def _bounded_read_lines(
     end_line = _optional_int(arguments, "end_line")
     start_line = 1 if start_line is None else start_line
     if start_line <= 0 or (end_line is not None and end_line < start_line):
-        raise ExplorerError("INVALID_TOOL_ARGUMENTS", "Invalid read line range")
+        raise SearchError("INVALID_TOOL_ARGUMENTS", "Invalid read line range")
     max_end = start_line + settings.max_read_lines - 1
     return (
         start_line,

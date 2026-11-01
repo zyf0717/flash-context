@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from time import monotonic
 
-from flash_context.types import Diagnostic, ExplorerError
+from flash_context.types import Diagnostic, SearchError
 
 DEFAULT_DENY_PATTERNS = (
     ".git/**",
@@ -52,7 +52,7 @@ class PathSafety:
         root = self.repo_root.resolve()
         object.__setattr__(self, "repo_root", root)
         if not root.exists() or not root.is_dir():
-            raise ExplorerError(
+            raise SearchError(
                 "REPO_NOT_FOUND",
                 "Repository root must exist and be a directory",
                 details={"repo_root": str(root)},
@@ -62,14 +62,14 @@ class PathSafety:
         try:
             return self._resolve_existing_file(requested)
         except OSError as exc:
-            raise ExplorerError(
+            raise SearchError(
                 "PATH_UNREADABLE", "Repository path could not be accessed"
             ) from exc
 
     def _resolve_existing_file(self, requested: str | Path) -> Path:
         raw = Path(requested)
         if ".." in raw.parts:
-            raise ExplorerError(
+            raise SearchError(
                 "PATH_OUTSIDE_ROOT",
                 "Requested path is outside the repository root",
                 details={"path": str(requested)},
@@ -79,19 +79,19 @@ class PathSafety:
             self.ensure_allowed(candidate)
         resolved = candidate.resolve(strict=False)
         if not _is_relative_to(resolved, self.repo_root):
-            raise ExplorerError(
+            raise SearchError(
                 "PATH_OUTSIDE_ROOT",
                 "Requested path is outside the repository root",
                 details={"path": str(requested)},
             )
         if not resolved.exists():
-            raise ExplorerError(
+            raise SearchError(
                 "PATH_NOT_FOUND",
                 "Requested path does not exist",
                 details={"path": self.relative_or_raw(resolved)},
             )
         if not resolved.is_file():
-            raise ExplorerError(
+            raise SearchError(
                 "PATH_DENIED",
                 "Requested path is not a regular file",
                 details={"path": self.relative_or_raw(resolved)},
@@ -103,7 +103,7 @@ class PathSafety:
         rel = path.relative_to(self.repo_root).as_posix()
         parts = rel.split("/")
         if any(part in DENY_DIR_NAMES for part in parts):
-            raise ExplorerError(
+            raise SearchError(
                 "PATH_DENIED",
                 "Requested path is denied by repository safety policy",
                 details={"path": rel},
@@ -116,7 +116,7 @@ class PathSafety:
             or _matches_patterns(rel, DEFAULT_DENY_PATTERNS)
             or _matches_patterns(rel, self.ignore)
         ):
-            raise ExplorerError(
+            raise SearchError(
                 "PATH_DENIED",
                 "Requested path is denied by repository safety policy",
                 details={"path": rel},
@@ -131,7 +131,7 @@ class PathSafety:
     def validate_glob_pattern(self, pattern: str) -> None:
         raw = Path(pattern)
         if raw.is_absolute() or ".." in raw.parts:
-            raise ExplorerError(
+            raise SearchError(
                 "PATH_OUTSIDE_ROOT",
                 "Glob pattern must stay inside the repository root",
                 details={"pattern": pattern},
@@ -165,7 +165,7 @@ class PathSafety:
                             if resolved not in seen:
                                 seen.add(resolved)
                                 yield resolved
-                    except ExplorerError as exc:
+                    except SearchError as exc:
                         if exc.code == "TOOL_LIMIT_EXCEEDED":
                             raise
                         if exc.code not in {"PATH_DENIED", "PATH_OUTSIDE_ROOT"}:
@@ -191,7 +191,7 @@ class PathSafety:
                     return
                 directory = candidate
             yield from walk(directory)
-        except ExplorerError as exc:
+        except SearchError as exc:
             if exc.code == "TOOL_LIMIT_EXCEEDED":
                 raise
             if exc.code not in {"PATH_DENIED", "PATH_OUTSIDE_ROOT"}:
@@ -253,4 +253,4 @@ class ScanBudget:
             or self.entries > self.limits.max_scan_entries
             or self.remaining_seconds() <= 0
         ):
-            raise ExplorerError("TOOL_LIMIT_EXCEEDED", "Tool scan budget exhausted")
+            raise SearchError("TOOL_LIMIT_EXCEEDED", "Tool scan budget exhausted")

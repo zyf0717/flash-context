@@ -22,7 +22,7 @@ cp config.yaml.example config.yaml
 cp .env.example .env
 ```
 
-Edit `config.yaml` for model, explorer, and tool settings. Use `.env` or process
+Edit `config.yaml` for model, search, and tool settings. Use `.env` or process
 environment variables for secrets and local overrides. The inspected
 repository's configuration files are not loaded implicitly.
 
@@ -32,7 +32,7 @@ Configuration precedence:
 defaults < project-root config.yaml < project-root .env < process environment < CLI overrides
 ```
 
-Relative paths in YAML, including `explorer.traj_dir`, resolve from the
+Relative paths in YAML, including `search.traj_dir`, resolve from the
 `flash-context` project root. Environment path overrides are used as supplied.
 The YAML and `.env` stages apply only to source checkouts.
 
@@ -46,7 +46,7 @@ The [example YAML](../config.yaml.example) and
 | `FLASH_CONTEXT_BASE_URL` | unset | OpenAI-compatible endpoint base URL |
 | `FLASH_CONTEXT_MODEL` | unset | Endpoint model identifier |
 | `FLASH_CONTEXT_API_KEY` | unset | Optional endpoint credential |
-| `FLASH_CONTEXT_MAX_TURNS` | `12` | Maximum exploration turns |
+| `FLASH_CONTEXT_MAX_TURNS` | `12` | Maximum search turns |
 | `FLASH_CONTEXT_MAX_READ_BYTES` | `12000` | File read byte cap |
 | `FLASH_CONTEXT_MAX_GREP_RESULTS` | `50` | Grep result cap |
 | `FLASH_CONTEXT_TRAJ_DIR` | unset | Optional trajectory log directory |
@@ -65,10 +65,10 @@ The [example YAML](../config.yaml.example) and
 | `FLASH_CONTEXT_MAX_PARSE_BYTES` | `1048576` | Parser input bytes per file |
 
 YAML uses the same names in snake_case: endpoint settings under `model`,
-turn/citation limits and ignores under `explorer`, other limits under `tools`.
+turn/citation limits and ignores under `search`, other limits under `tools`.
 See the example YAML for the exact layout. Numeric limits must be positive and
 finite; temperature may be zero. Endpoint settings are required only for model
-exploration. [The shared contract](contracts.md) defines evidence and diagnostic
+search. [The shared contract](contracts.md) defines evidence and diagnostic
 behavior; [CLI](cli.md) defines exit codes.
 
 ### Large repositories
@@ -80,7 +80,7 @@ tree that exhausts the defaults, explicitly increase budgets, for example:
 FLASH_CONTEXT_MAX_SCAN_ENTRIES=100000 \
 FLASH_CONTEXT_MAX_SCAN_BYTES=100000000 \
 FLASH_CONTEXT_TOOL_TIMEOUT_SECONDS=20 \
-flash-context explore --repo /path/to/repo \
+flash-context search --repo /path/to/repo \
   --query "Find the recursive dependency resolution implementation"
 ```
 
@@ -90,7 +90,7 @@ tool and can increase latency; inspect the warnings before increasing them.
 ### Trajectory logs
 
 Trajectory logging is disabled by default. A configured directory must resolve
-outside the selected repository, otherwise exploration returns `CONFIG_INVALID`.
+outside the selected repository, otherwise search returns `CONFIG_INVALID`.
 Existing configurations using `.flash-context` inside the target must move the
 logs or disable them: `FLASH_CONTEXT_TRAJ_DIR=` overrides an inherited directory.
 YAML null and an explicit `SettingsOverrides(traj_dir=None)` also disable logging.

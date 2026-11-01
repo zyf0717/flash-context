@@ -11,7 +11,7 @@ from typing import Any
 import yaml
 
 from flash_context.tools.safety import ScanLimits
-from flash_context.types import ExplorerError
+from flash_context.types import SearchError
 
 
 class _Unset(Enum):
@@ -55,12 +55,12 @@ class Settings:
 
     def require_endpoint(self) -> None:
         if not self.base_url:
-            raise ExplorerError(
+            raise SearchError(
                 "CONFIG_MISSING_ENDPOINT",
                 "FLASH_CONTEXT_BASE_URL is required",
             )
         if not self.model:
-            raise ExplorerError(
+            raise SearchError(
                 "CONFIG_INVALID",
                 "FLASH_CONTEXT_MODEL is required",
             )
@@ -120,7 +120,7 @@ def _load_dotenv(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
     if not path.is_file():
-        raise ExplorerError(
+        raise SearchError(
             "CONFIG_INVALID",
             f"Env path is not a file: {path}",
         )
@@ -133,14 +133,14 @@ def _load_dotenv(path: Path) -> dict[str, str]:
         if line.startswith("export "):
             line = line.removeprefix("export ").lstrip()
         if "=" not in line:
-            raise ExplorerError(
+            raise SearchError(
                 "CONFIG_INVALID",
                 f"Invalid .env line: {line_number}",
             )
         key, value = line.split("=", 1)
         key = key.strip()
         if not key:
-            raise ExplorerError(
+            raise SearchError(
                 "CONFIG_INVALID",
                 f"Invalid .env line: {line_number}",
             )
@@ -160,7 +160,7 @@ def _apply_yaml(settings: Settings, path: Path, *, project_root: Path) -> Settin
     try:
         loaded = yaml.safe_load(_read_config(path))
     except yaml.YAMLError as exc:
-        raise ExplorerError(
+        raise SearchError(
             "CONFIG_INVALID",
             f"Invalid YAML config: {path}",
             details={"line": exc.problem_mark.line + 1}
@@ -172,14 +172,14 @@ def _apply_yaml(settings: Settings, path: Path, *, project_root: Path) -> Settin
     elif isinstance(loaded, dict):
         data = {str(key): value for key, value in loaded.items()}
     else:
-        raise ExplorerError("CONFIG_INVALID", "YAML config must be a mapping")
+        raise SearchError("CONFIG_INVALID", "YAML config must be a mapping")
 
     model = _section(data, "model")
-    explorer = _section(data, "explorer")
+    search = _section(data, "search")
     tools = _section(data, "tools")
-    traj_dir = explorer.get("traj_dir", data.get("traj_dir", settings.traj_dir))
+    traj_dir = search.get("traj_dir", data.get("traj_dir", settings.traj_dir))
 
-    sections = {"model": model, "explorer": explorer, "tools": tools}
+    sections = {"model": model, "search": search, "tools": tools}
     values: dict[str, Any] = {
         name: parser(sections[group].get(name, getattr(settings, name)), name)
         for name, (group, parser) in _SCALARS.items()
@@ -191,7 +191,7 @@ def _apply_yaml(settings: Settings, path: Path, *, project_root: Path) -> Settin
         model=str(model.get("model", settings.model) or ""),
         api_key=_optional_str(model.get("api_key", settings.api_key)),
         traj_dir=_optional_project_path(traj_dir, project_root=project_root),
-        ignore=_str_list(explorer.get("ignore", settings.ignore), "ignore"),
+        ignore=_str_list(search.get("ignore", settings.ignore), "ignore"),
     )
 
 
@@ -237,7 +237,7 @@ def _validate_settings(settings: Settings) -> None:
             or (value == 0 and name != "temperature")
         ):
             requirement = "non-negative" if name == "temperature" else "positive"
-            raise ExplorerError(
+            raise SearchError(
                 "CONFIG_INVALID",
                 f"{name} must be {requirement} and finite",
                 details={name: value},
@@ -247,35 +247,35 @@ def _validate_settings(settings: Settings) -> None:
 def _section(data: dict[str, Any], name: str) -> dict[str, Any]:
     value = data.get(name, {})
     if not isinstance(value, dict):
-        raise ExplorerError("CONFIG_INVALID", f"[{name}] must be a table")
+        raise SearchError("CONFIG_INVALID", f"[{name}] must be a table")
     return value
 
 
 def _int_value(value: object, name: str) -> int:
     if isinstance(value, bool):
-        raise ExplorerError("CONFIG_INVALID", f"{name} must be an integer")
+        raise SearchError("CONFIG_INVALID", f"{name} must be an integer")
     if isinstance(value, int):
         return value
     if not isinstance(value, str):
-        raise ExplorerError("CONFIG_INVALID", f"{name} must be an integer")
+        raise SearchError("CONFIG_INVALID", f"{name} must be an integer")
     try:
         parsed = int(value)
     except ValueError as exc:
-        raise ExplorerError("CONFIG_INVALID", f"{name} must be an integer") from exc
+        raise SearchError("CONFIG_INVALID", f"{name} must be an integer") from exc
     return parsed
 
 
 def _float_value(value: object, name: str) -> float:
     if isinstance(value, bool):
-        raise ExplorerError("CONFIG_INVALID", f"{name} must be a number")
+        raise SearchError("CONFIG_INVALID", f"{name} must be a number")
     if isinstance(value, int | float):
         return float(value)
     if not isinstance(value, str):
-        raise ExplorerError("CONFIG_INVALID", f"{name} must be a number")
+        raise SearchError("CONFIG_INVALID", f"{name} must be a number")
     try:
         parsed = float(value)
     except ValueError as exc:
-        raise ExplorerError("CONFIG_INVALID", f"{name} must be a number") from exc
+        raise SearchError("CONFIG_INVALID", f"{name} must be a number") from exc
     return parsed
 
 
@@ -302,9 +302,9 @@ def _str_list(value: object, name: str) -> list[str]:
     if value is None:
         return []
     if not isinstance(value, list):
-        raise ExplorerError("CONFIG_INVALID", f"{name} must be a list")
+        raise SearchError("CONFIG_INVALID", f"{name} must be a list")
     if not all(isinstance(item, str) for item in value):
-        raise ExplorerError("CONFIG_INVALID", f"{name} entries must be strings")
+        raise SearchError("CONFIG_INVALID", f"{name} entries must be strings")
     return list(value)
 
 
@@ -312,16 +312,16 @@ def _read_config(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
-        raise ExplorerError(
+        raise SearchError(
             "CONFIG_INVALID", "Configuration file could not be read"
         ) from exc
 
 
 # One mapping owns numeric config section, conversion, environment key and validation.
 _SCALARS = {
-    "max_turns": ("explorer", _int_value),
-    "max_citation_lines": ("explorer", _int_value),
-    "max_total_citation_lines": ("explorer", _int_value),
+    "max_turns": ("search", _int_value),
+    "max_citation_lines": ("search", _int_value),
+    "max_total_citation_lines": ("search", _int_value),
     "timeout_seconds": ("model", _float_value),
     "max_completion_tokens": ("model", _int_value),
     "temperature": ("model", _float_value),

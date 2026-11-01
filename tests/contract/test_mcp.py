@@ -11,16 +11,16 @@ import pytest
 
 from flash_context import config as config_module
 from flash_context import mcp_server
-from flash_context.agent import explore
+from flash_context.agent import search
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
-from flash_context.mcp_server import explore_repository_handler
+from flash_context.mcp_server import search_repository_handler
 from flash_context.types import (
     Citation,
     Diagnostic,
-    ExploreRequest,
-    ExploreResult,
     RawLocation,
+    SearchRequest,
+    SearchResult,
 )
 
 
@@ -35,10 +35,10 @@ def test_mcp_handler_delegates_to_core(tmp_path: Path, warning: str) -> None:
     captured: dict[str, object] = {}
     settings = Settings(base_url="http://test/v1", model="test-model")
 
-    def fake_core(request: ExploreRequest, core_settings: Settings) -> ExploreResult:
+    def fake_core(request: SearchRequest, core_settings: Settings) -> SearchResult:
         captured["request"] = request
         captured["settings"] = core_settings
-        return ExploreResult(
+        return SearchResult(
             query=request.query,
             repo_root=str(tmp_path),
             answer="src/api/validation.py:1",
@@ -51,7 +51,7 @@ def test_mcp_handler_delegates_to_core(tmp_path: Path, warning: str) -> None:
             warnings=[Diagnostic(warning)],
         )
 
-    result = explore_repository_handler(
+    result = search_repository_handler(
         query="Find request validation",
         repo_root=str(tmp_path),
         max_turns=2,
@@ -63,7 +63,7 @@ def test_mcp_handler_delegates_to_core(tmp_path: Path, warning: str) -> None:
     assert result["truncated"] is True
     assert result["warnings"] == [warning]
     request = captured["request"]
-    assert isinstance(request, ExploreRequest)
+    assert isinstance(request, SearchRequest)
     assert request.max_turns == 2
     assert result["citations"] == [
         {
@@ -86,7 +86,7 @@ def test_mcp_handler_delegates_to_core(tmp_path: Path, warning: str) -> None:
 def test_mcp_handler_returns_structured_error_for_invalid_root(tmp_path: Path) -> None:
     settings = Settings(base_url="http://test/v1", model="test-model")
 
-    result = explore_repository_handler(
+    result = search_repository_handler(
         query="Find request validation",
         repo_root=str(tmp_path / "missing"),
         settings=settings,
@@ -117,9 +117,9 @@ model:
         encoding="utf-8",
     )
 
-    def fake_core(request: ExploreRequest, core_settings: Settings) -> ExploreResult:
+    def fake_core(request: SearchRequest, core_settings: Settings) -> SearchResult:
         captured["settings"] = core_settings
-        return ExploreResult(
+        return SearchResult(
             query=request.query,
             repo_root=str(tmp_path),
             answer="src/api/validation.py:1",
@@ -127,7 +127,7 @@ model:
             turns_used=1,
         )
 
-    result = explore_repository_handler(
+    result = search_repository_handler(
         query="Find request validation",
         repo_root=str(tmp_path),
         core=fake_core,
@@ -170,10 +170,10 @@ def test_mcp_handler_returns_core_normalized_citation_result(
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses))
 
-    def core(request: ExploreRequest, core_settings: Settings) -> ExploreResult:
-        return explore(request, core_settings, client=client)
+    def core(request: SearchRequest, core_settings: Settings) -> SearchResult:
+        return search(request, core_settings, client=client)
 
-    result = explore_repository_handler(
+    result = search_repository_handler(
         query="Find request validation",
         repo_root=str(repo),
         settings=settings,
@@ -206,7 +206,7 @@ def test_mcp_handler_returns_core_normalized_citation_result(
     ]
 
 
-def test_mcp_server_registers_explore_repository(
+def test_mcp_server_registers_search_repository(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FakeServer:
@@ -231,7 +231,7 @@ def test_mcp_server_registers_explore_repository(
     server = mcp_server.create_server()
 
     assert server.name == "flash-context"
-    assert "explore_repository" in server.tools
+    assert "search_repository" in server.tools
 
 
 def _mock_transport(responses: Iterator[dict[str, object]]) -> httpx.MockTransport:
@@ -242,10 +242,10 @@ def _mock_transport(responses: Iterator[dict[str, object]]) -> httpx.MockTranspo
     return httpx.MockTransport(handler)
 
 
-def test_real_mcp_discovery_describes_repository_exploration() -> None:
+def test_real_mcp_discovery_describes_repository_search() -> None:
     pytest.importorskip("mcp")
     tools = asyncio.run(mcp_server.create_server().list_tools())
-    assert [tool.name for tool in tools] == ["explore_repository"]
+    assert [tool.name for tool in tools] == ["search_repository"]
     assert tools[0].inputSchema["required"] == ["query"]
     description = tools[0].description.lower()
     assert "read-only" in description

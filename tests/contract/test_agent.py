@@ -6,12 +6,12 @@ from typing import Any, cast
 
 import pytest
 
-from flash_context.agent import explore
+from flash_context.agent import search
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
 from flash_context.types import (
-    ExploreRequest,
-    ExplorerError,
+    SearchError,
+    SearchRequest,
 )
 from tests.helpers import (
     _last_tool_payload,
@@ -34,8 +34,8 @@ def test_pathless_assignment_match_uses_model_loop(
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
-    result = explore(
-        ExploreRequest(query="Find `max_parallel_tools`", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find `max_parallel_tools`", repo_root=repo),
         settings,
         client=client,
     )
@@ -51,8 +51,8 @@ def test_multiple_pathless_definitions_use_model_loop(
     repo = tmp_path / "repo"
     (repo / "a").mkdir(parents=True)
     (repo / "b").mkdir(parents=True)
-    (repo / "a" / "agent.py").write_text("def explore():\n    pass\n", encoding="utf-8")
-    (repo / "b" / "agent.py").write_text("def explore():\n    pass\n", encoding="utf-8")
+    (repo / "a" / "agent.py").write_text("def search():\n    pass\n", encoding="utf-8")
+    (repo / "b" / "agent.py").write_text("def search():\n    pass\n", encoding="utf-8")
     responses: Iterator[dict[str, object]] = iter(
         [_message_response("NO_CITATIONS_FOUND")]
     )
@@ -60,8 +60,8 @@ def test_multiple_pathless_definitions_use_model_loop(
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
-    result = explore(
-        ExploreRequest(query="Find `explore`", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find `search`", repo_root=repo),
         settings,
         client=client,
     )
@@ -78,9 +78,9 @@ def test_model_loop_without_endpoint_still_requires_endpoint(
     repo.mkdir()
     settings = Settings()
 
-    with pytest.raises(ExplorerError) as exc_info:
-        explore(
-            ExploreRequest(query="Find missing_symbol", repo_root=repo),
+    with pytest.raises(SearchError) as exc_info:
+        search(
+            SearchRequest(query="Find missing_symbol", repo_root=repo),
             settings,
         )
 
@@ -114,8 +114,8 @@ def test_mock_endpoint_drives_glob_grep_read_loop(tmp_path: Path) -> None:
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
-    result = explore(
-        ExploreRequest(query="Find request validation", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -139,8 +139,8 @@ def test_unsupported_tool_call_is_fatal(tmp_path: Path) -> None:
     )
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
-    with pytest.raises(ExplorerError) as exc_info:
-        explore(ExploreRequest(query="write", repo_root=repo), settings, client=client)
+    with pytest.raises(SearchError) as exc_info:
+        search(SearchRequest(query="write", repo_root=repo), settings, client=client)
 
     assert exc_info.value.code == "UNSUPPORTED_TOOL_CALL"
 
@@ -167,8 +167,8 @@ def test_max_turns_returns_partial_answer_when_model_provided_content(
     )
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
-    result = explore(
-        ExploreRequest(
+    result = search(
+        SearchRequest(
             query="Find request validation",
             repo_root=repo,
             max_turns=1,
@@ -201,8 +201,8 @@ def test_model_search_scan_failure_reaches_shared_result(
     seen: list[dict[str, object]] = []
     client = ChatClient(settings, transport=_mock_transport(responses, seen))
     try:
-        result = explore(
-            ExploreRequest(query="How is this implemented?", repo_root=tmp_path),
+        result = search(
+            SearchRequest(query="How is this implemented?", repo_root=tmp_path),
             settings,
             client=client,
         )
@@ -222,8 +222,8 @@ def test_capped_initial_file_sample_is_not_search_failure(tmp_path: Path) -> Non
     seen: list[dict[str, object]] = []
     client = ChatClient(settings, transport=_mock_transport(responses, seen))
     try:
-        result = explore(
-            ExploreRequest(query="How is this implemented?", repo_root=tmp_path),
+        result = search(
+            SearchRequest(query="How is this implemented?", repo_root=tmp_path),
             settings,
             client=client,
         )

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from flash_context.tools import read_file, repo_glob, repo_grep
-from flash_context.types import ExplorerError
+from flash_context.types import SearchError
 
 
 def test_read_file_returns_relative_path_and_line_range(tmp_path: Path) -> None:
@@ -34,7 +34,7 @@ def test_read_file_rejects_path_traversal(tmp_path: Path) -> None:
     outside = tmp_path / "secret.txt"
     outside.write_text("do-not-read", encoding="utf-8")
 
-    with pytest.raises(ExplorerError) as exc_info:
+    with pytest.raises(SearchError) as exc_info:
         read_file(
             repo_root=repo,
             path="../secret.txt",
@@ -50,7 +50,7 @@ def test_read_file_rejects_normalized_path_traversal(tmp_path: Path) -> None:
     (repo / "safe").mkdir(parents=True)
     (repo / "app.py").write_text("print('ok')\n", encoding="utf-8")
 
-    with pytest.raises(ExplorerError) as exc_info:
+    with pytest.raises(SearchError) as exc_info:
         read_file(
             repo_root=repo,
             path="safe/../app.py",
@@ -69,7 +69,7 @@ def test_read_file_rejects_symlink_escape(tmp_path: Path) -> None:
     outside.write_text("do-not-read", encoding="utf-8")
     (repo / "link.txt").symlink_to(outside)
 
-    with pytest.raises(ExplorerError) as exc_info:
+    with pytest.raises(SearchError) as exc_info:
         read_file(repo_root=repo, path="link.txt", max_bytes=100)
 
     assert exc_info.value.code == "PATH_OUTSIDE_ROOT"
@@ -81,7 +81,7 @@ def test_read_file_rejects_denylist_without_content_leak(tmp_path: Path) -> None
     repo.mkdir()
     (repo / ".env").write_text("SECRET_TOKEN=abc", encoding="utf-8")
 
-    with pytest.raises(ExplorerError) as exc_info:
+    with pytest.raises(SearchError) as exc_info:
         read_file(repo_root=repo, path=".env", max_bytes=100)
 
     assert exc_info.value.code == "PATH_DENIED"
@@ -104,7 +104,7 @@ def test_read_file_rejects_start_line_beyond_eof(tmp_path: Path) -> None:
     repo.mkdir()
     (repo / "short.txt").write_text("one\ntwo\n", encoding="utf-8")
 
-    with pytest.raises(ExplorerError) as exc_info:
+    with pytest.raises(SearchError) as exc_info:
         read_file(repo_root=repo, path="short.txt", start_line=3, max_bytes=100)
 
     assert exc_info.value.code == "INVALID_TOOL_ARGUMENTS"
@@ -143,7 +143,7 @@ def test_repo_grep_rejects_invalid_regex(tmp_path: Path) -> None:
     repo.mkdir()
     (repo / "a.py").write_text("needle\n", encoding="utf-8")
 
-    with pytest.raises(ExplorerError) as exc_info:
+    with pytest.raises(SearchError) as exc_info:
         repo_grep(repo_root=repo, pattern="[", max_results=2)
 
     assert exc_info.value.code == "INVALID_GREP_PATTERN"

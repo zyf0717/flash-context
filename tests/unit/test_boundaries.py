@@ -5,11 +5,11 @@ from pathlib import Path
 import httpx
 import pytest
 
-from flash_context.agent import explore
+from flash_context.agent import search
 from flash_context.citations import CitationResolver
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
-from flash_context.types import Citation, ExploreRequest, ExplorerError
+from flash_context.types import Citation, SearchError, SearchRequest
 
 SAMPLES = {
     "py": "def sample():\n    return 1\n",
@@ -129,8 +129,8 @@ def test_range_repair_and_no_fallback_bypass(tmp_path: Path) -> None:
     settings = Settings(base_url="http://test/v1", model="mock")
     client = ChatClient(settings, transport=httpx.MockTransport(handle))
     try:
-        result = explore(
-            ExploreRequest("Where is the behavior?", tmp_path), settings, client=client
+        result = search(
+            SearchRequest("Where is the behavior?", tmp_path), settings, client=client
         )
     finally:
         client.close()
@@ -142,8 +142,8 @@ def test_range_repair_and_no_fallback_bypass(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "name,section",
     [
-        ("max_citation_lines", "explorer"),
-        ("max_total_citation_lines", "explorer"),
+        ("max_citation_lines", "search"),
+        ("max_total_citation_lines", "search"),
         ("max_parse_bytes", "tools"),
     ],
 )
@@ -165,7 +165,7 @@ def test_precision_configuration_precedence(
     object.__setattr__(overrides, name, 25)
     assert getattr(config.load_settings(overrides=overrides), name) == 25
     monkeypatch.setenv(env, "0")
-    with pytest.raises(ExplorerError, match="must be positive"):
+    with pytest.raises(SearchError, match="must be positive"):
         config.load_settings()
 
 
@@ -184,8 +184,8 @@ def test_rejected_range_at_turn_limit_is_empty(
         ),
     )
     try:
-        result = explore(
-            ExploreRequest("Where is behavior?", tmp_path, citation=citation_mode),
+        result = search(
+            SearchRequest("Where is behavior?", tmp_path, citation=citation_mode),
             settings,
             client=client,
         )
@@ -234,8 +234,8 @@ def test_prose_uses_resolved_labels(tmp_path: Path) -> None:
         ),
     )
     try:
-        result = explore(
-            ExploreRequest("Where is behavior?", tmp_path, citation=False),
+        result = search(
+            SearchRequest("Where is behavior?", tmp_path, citation=False),
             settings,
             client=client,
         )

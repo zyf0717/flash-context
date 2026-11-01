@@ -20,8 +20,8 @@ from flash_context.types import (
     Citation,
     CitationPrecision,
     Diagnostic,
-    ExplorerError,
     RawLocation,
+    SearchError,
     source_lines,
 )
 
@@ -183,7 +183,7 @@ class CitationResolver:
                 ignore=self.settings.ignore,
                 limits=self.settings.limits,
             )
-        except ExplorerError as exc:
+        except SearchError as exc:
             if exc.code == "TOOL_LIMIT_EXCEEDED":
                 source = Source([], None, "limited", [Diagnostic.READ_LIMIT])
                 self.sources[path] = source
@@ -280,7 +280,7 @@ class CitationResolver:
                             (child, child_scope)
                             for child in reversed(node.named_children)
                         )
-            except (ValueError, ExplorerError):
+            except (ValueError, SearchError):
                 regions = None
                 status = "timeout"
         if status == "limited":

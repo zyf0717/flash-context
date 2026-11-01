@@ -4,6 +4,28 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-01
+
+### Changed
+
+- Position flash-context as repository search and context retrieval for AI agents,
+  with exact lookups and model-guided search returning focused source evidence.
+- Rename the CLI command to `search`, the MCP tool to `search_repository`, and
+  the shared Python API and YAML section to use search terminology. Remove the
+  previous names without compatibility aliases.
+
+### Migration
+
+- Replace `flash-context explore` with `flash-context search` and update MCP
+  callers from `explore_repository` to `search_repository`.
+- Python callers must import `search` from `flash_context.agent`,
+  `search_repository_handler` from `flash_context.mcp_server`, and `SearchRequest`,
+  `SearchResult`, and `SearchError` from `flash_context.types` in place of
+  `explore`, `explore_repository_handler`, `ExploreRequest`, `ExploreResult`, and
+  `ExplorerError` respectively.
+- Rename the `explorer` section in source-checkout `config.yaml` files to `search`.
+  Environment variable names, request fields, and result schemas are unchanged.
+
 ## [0.4.2] - 2026-11-01
 
 ### Changed

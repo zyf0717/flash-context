@@ -38,7 +38,7 @@ class Diagnostic(StrEnum):
     NO_FINAL_CITATIONS = "final answer did not include valid citations"
     PARTIAL_NO_CITATIONS = "partial answer did not include valid citations"
     NARROW_EVIDENCE = "sufficient narrow evidence stopped broad read"
-    REPEATED_CALL = "repeated tool call stopped exploration"
+    REPEATED_CALL = "repeated tool call stopped search"
     PARTIAL_TURN_LIMIT = "max turns exceeded after partial answer"
     TURN_LIMIT = "max turns exceeded without final answer"
     RAW_UNREADABLE = "raw location could not be read"
@@ -82,7 +82,7 @@ ErrorCode = Literal[
 
 
 @dataclass(slots=True)
-class ExplorerError(Exception):
+class SearchError(Exception):
     code: ErrorCode
     message: str
     retryable: bool = False
@@ -187,7 +187,7 @@ class ToolObservation:
     matches: list[str] = field(default_factory=list)
     hits: list[SearchHit] = field(default_factory=list)
     truncated: bool = False
-    error: ExplorerError | None = None
+    error: SearchError | None = None
     warnings: list[Diagnostic] = field(default_factory=list)
 
     @property
@@ -224,13 +224,13 @@ class ToolObservation:
 
     @classmethod
     def from_error(
-        cls, error: ExplorerError, *, tool_call_id: str | None = None
+        cls, error: SearchError, *, tool_call_id: str | None = None
     ) -> ToolObservation:
         return cls(tool_call_id=tool_call_id, ok=False, error=error)
 
 
 @dataclass(frozen=True, slots=True)
-class ExploreRequest:
+class SearchRequest:
     query: str
     repo_root: Path
     max_turns: int = 12
@@ -238,15 +238,15 @@ class ExploreRequest:
 
     def validate(self) -> None:
         if not self.query.strip():
-            raise ExplorerError("QUERY_EMPTY", "Query must not be blank")
+            raise SearchError("QUERY_EMPTY", "Query must not be blank")
         if self.max_turns <= 0:
-            raise ExplorerError(
+            raise SearchError(
                 "CONFIG_INVALID",
                 "max_turns must be positive",
                 details={"max_turns": self.max_turns},
             )
         if not self.repo_root.exists() or not self.repo_root.is_dir():
-            raise ExplorerError(
+            raise SearchError(
                 "REPO_NOT_FOUND",
                 "Repository root must exist and be a directory",
                 details={"repo_root": str(self.repo_root)},
@@ -262,7 +262,7 @@ class ExploreRequest:
 
 
 @dataclass(slots=True)
-class ExploreResult:
+class SearchResult:
     query: str
     repo_root: str
     answer: str

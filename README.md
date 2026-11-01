@@ -5,15 +5,16 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/flash-context)](https://pypi.org/project/flash-context/)
 [![License](https://img.shields.io/pypi/l/flash-context)](LICENSE)
 
-A lightweight, model-agnostic repository explorer for AI agents, available as a
-Python CLI and Model Context Protocol (MCP) server. It combines deterministic
-lookup with search and reading delegated to a utility model through an
-OpenAI-compatible endpoint, returning compact, validated file-line citations and
-source snippets.
+A lightweight, model-agnostic repository search tool for AI agents. Find relevant
+code, documentation, and configuration through exact lookups or model-guided
+search, and retrieve compact snippets with validated file-line citations.
+Available as a Python CLI and Model Context Protocol (MCP) server.
 
-CLI and MCP share a read-only core for exploring code, documentation,
-configuration, and other local text files with path safety and resource limits.
-See [safety and evidence validation](docs/contracts.md#read-only-tools-and-safety)
+CLI and MCP share a read-only core with path safety and resource limits. Exact
+lookups can resolve locally; broader queries delegate search and reading to a
+utility model through an OpenAI-compatible endpoint. Validation checks paths and
+source ranges; semantic relevance remains the model's judgment. See
+[safety and evidence validation](docs/contracts.md#read-only-tools-and-safety)
 for details and limitations.
 
 Inspired by [FastContext](https://arxiv.org/abs/2606.14066), a now-withdrawn paper
@@ -31,7 +32,7 @@ uv tool install flash-context
 export FLASH_CONTEXT_BASE_URL=http://localhost:1234/v1
 export FLASH_CONTEXT_MODEL=your-model
 
-flash-context explore --repo . --query "Find the request validation logic"
+flash-context search --repo . --query "Find the request validation logic"
 ```
 
 Replace the endpoint and model with your settings. Set `FLASH_CONTEXT_API_KEY`
@@ -68,7 +69,7 @@ regions and returns structural precision metadata. See the
 uvx --from 'flash-context[mcp]' flash-context mcp --transport stdio
 ```
 
-Exposes `explore_repository(query, repo_root?, max_turns?, citation?)`.
+Exposes `search_repository(query, repo_root?, max_turns?, citation?)`.
 See [MCP integration](docs/mcp.md) for editor configuration and source launches.
 
 ## Documentation

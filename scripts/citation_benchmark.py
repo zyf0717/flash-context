@@ -11,9 +11,9 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
-from flash_context.agent import explore
+from flash_context.agent import search
 from flash_context.config import Settings, load_settings
-from flash_context.types import ExploreRequest
+from flash_context.types import SearchRequest
 
 PROJECT = Path(__file__).resolve().parents[1]
 
@@ -31,8 +31,8 @@ def evaluate(case: dict[str, Any], settings: Settings) -> dict[str, object]:
         for region in case["expected"]
     ]
     started = perf_counter()
-    result = explore(
-        ExploreRequest(case["query"], root, max_turns=settings.max_turns), settings
+    result = search(
+        SearchRequest(case["query"], root, max_turns=settings.max_turns), settings
     )
     coverage = {
         (c.path, n)

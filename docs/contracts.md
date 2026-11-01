@@ -1,6 +1,6 @@
-# Shared exploration contract
+# Shared search contract
 
-CLI and MCP delegate to `explore(ExploreRequest, Settings)`. A request contains
+CLI and MCP delegate to `search(SearchRequest, Settings)`. A request contains
 `query`, `repo_root`, `max_turns` (12), and `citation` (true). The query must be
 nonblank, turns positive, and root an existing directory. Output formatting is
 an adapter concern. Configuration ownership and precedence are defined in
@@ -75,7 +75,7 @@ Unsupported or invalid syntax uses line windows of ±5 lines, bounded by availab
 complete lines. Parser outcomes distinguish unsupported, invalid, limited, timed
 out, and successfully parsed input. Input caps and parser deadlines emit explicit
 incomplete-result diagnostics. Symbols require parsed definitions. Grammars are
-bundled and never downloaded during exploration.
+bundled and never downloaded during search.
 
 Defaults: 120 lines per model citation, 600 unique file-lines total, 16 citations,
 16 candidate anchors, 1 MiB parser input per file. Cumulative parser input obeys
@@ -98,7 +98,7 @@ overlapping read excerpts by file and line. Trajectory metadata records why
 selection started without logging source text.
 Successful early answers and explicit `NO_CITATIONS_FOUND` remain terminal.
 
-Valid selected evidence ends exploration before trailing tool calls. Calls
+Valid selected evidence ends search before trailing tool calls. Calls
 repeated in later turns reuse observations; fresh siblings still execute, and
 an entirely repeated batch ends discovery. Exact queries may stop before a broad read
 when sufficient narrow evidence is already verified. Semantic queries never
@@ -109,7 +109,7 @@ remaining turns. If only documentation survives, results retain it with
 `truncated: true` and an implementation-unverified warning. Intent detection is
 lexical; explicit documentation and exact lookups retain their behavior.
 
-`NO_CITATIONS_FOUND` ends exploration without promoting previous reads.
+`NO_CITATIONS_FOUND` ends search without promoting previous reads.
 Token-limited completions return usable evidence with truncation and a warning,
 or enter selection when prior reads exist and a turn remains. Without either,
 they return `ENDPOINT_BAD_RESPONSE`. Empty messages without calls are

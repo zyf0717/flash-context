@@ -1,7 +1,7 @@
 [project]
 name = "flash-context"
-version = "0.4.2"
-description = "Read-only context exploration and retrieval for AI agents, starting with codebases and repositories."
+version = "0.5.0"
+description = "Repository search and context retrieval for AI agents."
 readme = "README.md"
 requires-python = ">=3.13"
 license = "Apache-2.0"

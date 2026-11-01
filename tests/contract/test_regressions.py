@@ -7,11 +7,11 @@ from typing import Any
 import httpx
 import pytest
 
-from flash_context.agent import explore
+from flash_context.agent import search
 from flash_context.citations import CitationResolver
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
-from flash_context.types import Diagnostic, ExploreRequest, ExplorerError
+from flash_context.types import Diagnostic, SearchError, SearchRequest
 from tests.helpers import _message_response, _multi_tool_response, _tool_response
 
 
@@ -34,8 +34,8 @@ def test_preflight_uses_one_leading_system(tmp_path: Path, status: str) -> None:
 
     with_client = ChatClient(settings, transport=httpx.MockTransport(handle))
     try:
-        result = explore(
-            ExploreRequest("Target", tmp_path), settings, client=with_client
+        result = search(
+            SearchRequest("Target", tmp_path), settings, client=with_client
         )
     finally:
         with_client.close()
@@ -63,8 +63,8 @@ def test_selection_is_bounded_and_tool_free(tmp_path: Path, ending: str) -> None
 
     client = ChatClient(settings, transport=httpx.MockTransport(handle))
     try:
-        result = explore(
-            ExploreRequest("How does it work?", tmp_path), settings, client=client
+        result = search(
+            SearchRequest("How does it work?", tmp_path), settings, client=client
         )
     finally:
         client.close()
@@ -111,8 +111,8 @@ def test_shifted_reads_select_after_coverage_stalls(tmp_path: Path) -> None:
 
     client = ChatClient(settings, transport=httpx.MockTransport(handle))
     try:
-        result = explore(
-            ExploreRequest("How does the answer work?", tmp_path, max_turns=10),
+        result = search(
+            SearchRequest("How does the answer work?", tmp_path, max_turns=10),
             settings,
             client=client,
         )
@@ -171,8 +171,8 @@ def test_fresh_sibling_prevents_premature_selection(tmp_path: Path) -> None:
     settings = Settings(base_url="http://test/v1", model="mock", max_turns=10)
     client = ChatClient(settings, transport=httpx.MockTransport(handle))
     try:
-        result = explore(
-            ExploreRequest("How does the answer work?", tmp_path, max_turns=10),
+        result = search(
+            SearchRequest("How does the answer work?", tmp_path, max_turns=10),
             settings,
             client=client,
         )
@@ -207,8 +207,8 @@ def test_token_limited_completion_selects_prior_read(tmp_path: Path) -> None:
     settings = Settings(base_url="http://test/v1", model="mock", max_turns=6)
     client = ChatClient(settings, transport=httpx.MockTransport(handle))
     try:
-        result = explore(
-            ExploreRequest("How does the answer work?", tmp_path),
+        result = search(
+            SearchRequest("How does the answer work?", tmp_path),
             settings,
             client=client,
         )
@@ -233,8 +233,8 @@ def test_endpoint_error_metadata_remains_private(tmp_path: Path) -> None:
 
     client = ChatClient(settings, transport=httpx.MockTransport(handle))
     try:
-        with pytest.raises(ExplorerError, match="ENDPOINT_BAD_RESPONSE"):
-            explore(ExploreRequest("MissingSymbol", repo), settings, client=client)
+        with pytest.raises(SearchError, match="ENDPOINT_BAD_RESPONSE"):
+            search(SearchRequest("MissingSymbol", repo), settings, client=client)
     finally:
         client.close()
     text = next((tmp_path / "logs").glob("*.json")).read_text()
@@ -279,7 +279,7 @@ def test_missing_symbol_cli_exit_contract(
     exit_code: int,
 ) -> None:
     from flash_context import cli
-    from flash_context.types import ExploreResult
+    from flash_context.types import SearchResult
 
     (tmp_path / "a.py").write_text("# padding\n" * 20)
     settings = Settings(
@@ -298,16 +298,16 @@ def test_missing_symbol_cli_exit_contract(
 
     client = ChatClient(settings, transport=httpx.MockTransport(handle))
 
-    def run(request: ExploreRequest, settings: Settings) -> ExploreResult:
-        return explore(request, settings, client=client)
+    def run(request: SearchRequest, settings: Settings) -> SearchResult:
+        return search(request, settings, client=client)
 
     monkeypatch.setattr(cli, "load_settings", load)
-    monkeypatch.setattr(cli, "explore", run)
+    monkeypatch.setattr(cli, "search", run)
     try:
         assert (
             cli.main(
                 [
-                    "explore",
+                    "search",
                     "--repo",
                     str(tmp_path),
                     "--query",

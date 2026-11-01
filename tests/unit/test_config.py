@@ -6,7 +6,7 @@ import pytest
 
 from flash_context import config as config_module
 from flash_context.config import SettingsOverrides, load_settings
-from flash_context.types import ExplorerError
+from flash_context.types import SearchError
 
 FLASH_CONTEXT_ENV_KEYS = (
     "FLASH_CONTEXT_BASE_URL",
@@ -89,7 +89,7 @@ model:
   max_completion_tokens: 300
   temperature: 0.3
 
-explorer:
+search:
   max_turns: 3
   ignore: ["vendor"]
 
@@ -214,7 +214,7 @@ def test_yaml_traj_dir_is_project_root_relative_from_external_cwd(
     caller.mkdir()
     (project_root / "config.yaml").write_text(
         """
-explorer:
+search:
   traj_dir: ".flash-context"
 """,
         encoding="utf-8",
@@ -235,7 +235,7 @@ def test_env_traj_dir_override_is_used_as_supplied(
     _clear_config_env(monkeypatch, project_root)
     (project_root / "config.yaml").write_text(
         """
-explorer:
+search:
   traj_dir: ".flash-context"
 """,
         encoding="utf-8",
@@ -297,7 +297,7 @@ def test_invalid_dotenv_line_raises_config_error(
     _clear_config_env(monkeypatch, tmp_path)
     (tmp_path / ".env").write_text("not-an-assignment\n", encoding="utf-8")
 
-    with pytest.raises(ExplorerError) as exc_info:
+    with pytest.raises(SearchError) as exc_info:
         load_settings()
 
     assert exc_info.value.code == "CONFIG_INVALID"
@@ -310,7 +310,7 @@ def test_invalid_integer_env_raises_config_error(
     _clear_config_env(monkeypatch, tmp_path)
     monkeypatch.setenv("FLASH_CONTEXT_MAX_TURNS", "nope")
 
-    with pytest.raises(ExplorerError) as exc_info:
+    with pytest.raises(SearchError) as exc_info:
         load_settings()
 
     assert exc_info.value.code == "CONFIG_INVALID"
@@ -323,7 +323,7 @@ def test_max_parallel_tools_must_be_positive(
     _clear_config_env(monkeypatch, tmp_path)
     monkeypatch.setenv("FLASH_CONTEXT_MAX_PARALLEL_TOOLS", "0")
 
-    with pytest.raises(ExplorerError) as exc_info:
+    with pytest.raises(SearchError) as exc_info:
         load_settings()
 
     assert exc_info.value.code == "CONFIG_INVALID"

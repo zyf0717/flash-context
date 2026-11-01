@@ -9,15 +9,15 @@ import pytest
 
 import flash_context.agent as agent_module
 from flash_context.agent import NO_CITATIONS_FOUND as NO_RESULT
-from flash_context.agent import explore, format_text_result
+from flash_context.agent import format_text_result, search
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
 from flash_context.types import (
     Citation,
     Diagnostic,
-    ExploreRequest,
-    ExplorerError,
     RawLocation,
+    SearchError,
+    SearchRequest,
 )
 from tests.helpers import (
     _message_response,
@@ -31,7 +31,7 @@ def test_semantic_query_with_exact_symbol_uses_model_loop(
 ) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    (repo / "agent.py").write_text("def explore():\n    pass\n", encoding="utf-8")
+    (repo / "agent.py").write_text("def search():\n    pass\n", encoding="utf-8")
     responses: Iterator[dict[str, object]] = iter(
         [_message_response("NO_CITATIONS_FOUND")]
     )
@@ -39,8 +39,8 @@ def test_semantic_query_with_exact_symbol_uses_model_loop(
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
-    result = explore(
-        ExploreRequest(query="How does `explore` work?", repo_root=repo),
+    result = search(
+        SearchRequest(query="How does `search` work?", repo_root=repo),
         settings,
         client=client,
     )
@@ -78,8 +78,8 @@ def test_content_with_trailing_tool_calls_stops_on_valid_citations(
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
-    result = explore(
-        ExploreRequest(query="Find request validation", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -114,15 +114,15 @@ def test_repeated_read_does_not_promote_unselected_evidence(tmp_path: Path) -> N
     settings = Settings(base_url="http://test/v1", model="test-model", max_turns=6)
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
-    result = explore(
-        ExploreRequest(query="Find request validation", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
 
     assert result.turns_used == 3
     assert result.citations == []
-    assert "repeated tool call stopped exploration" in result.warnings
+    assert "repeated tool call stopped search" in result.warnings
 
 
 @pytest.mark.parametrize("trailing_tool", [False, True])
@@ -142,8 +142,8 @@ def test_implementation_query_continues_past_documentation(
     responses = iter([first, _message_response("handler.js:1")])
     payloads: list[dict[str, object]] = []
     settings = Settings(base_url="http://test/v1", model="test-model")
-    result = explore(
-        ExploreRequest(
+    result = search(
+        SearchRequest(
             query="Where does the gateway handle Telegram messages?", repo_root=tmp_path
         ),
         settings,
@@ -175,8 +175,8 @@ def test_documentation_fallback_is_explicitly_incomplete(
     )
     payloads: list[dict[str, object]] = []
     settings = Settings(base_url="http://test/v1", model="test-model", max_turns=3)
-    result = explore(
-        ExploreRequest(
+    result = search(
+        SearchRequest(
             query="Find the Telegram implementation",
             repo_root=tmp_path,
             citation=citation,
@@ -198,8 +198,8 @@ def test_documentation_request_finishes_without_source_search(tmp_path: Path) ->
     (tmp_path / "guide.md").write_text("Handler documentation\n")
     settings = Settings(base_url="http://test/v1", model="test-model")
     responses = iter([_message_response("guide.md:1")])
-    result = explore(
-        ExploreRequest(query="Find the handler documentation", repo_root=tmp_path),
+    result = search(
+        SearchRequest(query="Find the handler documentation", repo_root=tmp_path),
         settings,
         client=ChatClient(settings, transport=_mock_transport(responses, [])),
     )
@@ -212,8 +212,8 @@ def test_documentation_fallback_at_turn_limit(tmp_path: Path) -> None:
     (tmp_path / "README").write_text("Integration overview\n")
     settings = Settings(base_url="http://test/v1", model="test-model", max_turns=2)
     responses = iter([_message_response("README:1"), _message_response("README:1")])
-    result = explore(
-        ExploreRequest(
+    result = search(
+        SearchRequest(
             query="Find the Telegram handler implementation", repo_root=tmp_path
         ),
         settings,
@@ -253,8 +253,8 @@ def test_narrow_evidence_stops_before_another_broad_read(tmp_path: Path) -> None
     )
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
-    result = explore(
-        ExploreRequest(query="Find `line`", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find `line`", repo_root=repo),
         settings,
         client=client,
     )
@@ -294,8 +294,8 @@ def test_final_prose_does_not_promote_unselected_reads(tmp_path: Path) -> None:
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
-    result = explore(
-        ExploreRequest(query="Find citation validation", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find citation validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -322,8 +322,8 @@ def test_citation_mode_strips_model_prose(tmp_path: Path) -> None:
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
-    result = explore(
-        ExploreRequest(query="Find request validation", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -352,8 +352,8 @@ def test_citation_prompt_uses_final_answer_block_and_normalizes_output(
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
-    result = explore(
-        ExploreRequest(query="Find request validation", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -374,8 +374,8 @@ def test_final_citations_preserve_adjacent_definitions(tmp_path: Path) -> None:
         settings,
         transport=_mock_transport(iter([_message_response("a.py#a\na.py#b")]), []),
     )
-    result = explore(
-        ExploreRequest("Where are the functions?", tmp_path), settings, client=client
+    result = search(
+        SearchRequest("Where are the functions?", tmp_path), settings, client=client
     )
     assert result.answer == "a.py:1\na.py:2"
     assert len(result.raw_locations) == 2
@@ -387,7 +387,7 @@ def test_raw_location_truncation_is_reported(tmp_path: Path) -> None:
     (repo / "big.py").write_text("abcdef\n", encoding="utf-8")
     settings = Settings(max_read_bytes=3)
 
-    result = explore(ExploreRequest(query="Use big.py:1", repo_root=repo), settings)
+    result = search(SearchRequest(query="Use big.py:1", repo_root=repo), settings)
 
     assert result.answer == "big.py:1"
     assert result.raw_locations == [RawLocation("big.py", 1, 1, "abc", truncated=True)]
@@ -420,8 +420,8 @@ def test_hallucinated_citation_is_rejected(tmp_path: Path) -> None:
     )
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
-    result = explore(
-        ExploreRequest(query="Find request validation", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -451,8 +451,8 @@ def test_unparsed_line_anchor_uses_bounded_window(tmp_path: Path) -> None:
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
-    result = explore(
-        ExploreRequest(query="Find request validation", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -478,8 +478,8 @@ def test_unselected_source_reads_do_not_replace_documentation(
         ]
     )
     settings = Settings(base_url="http://test/v1", model="test-model", max_turns=2)
-    result = explore(
-        ExploreRequest(
+    result = search(
+        SearchRequest(
             query="Where is the message handler implemented?",
             repo_root=tmp_path,
             citation=citation,
@@ -519,8 +519,8 @@ def test_symbol_evidence_cannot_fall_back_to_unrelated_reads(
         settings, transport=_mock_transport(iter(responses_list), payloads)
     )
     try:
-        result = explore(
-            ExploreRequest(query="RetryConfig", repo_root=tmp_path, citation=citation),
+        result = search(
+            SearchRequest(query="RetryConfig", repo_root=tmp_path, citation=citation),
             settings,
             client=client,
         )
@@ -555,8 +555,8 @@ def test_symbol_rejection_checks_cached_cited_lines(
     settings = Settings(base_url="http://test/v1", model="test")
     client = ChatClient(settings, transport=_mock_transport(responses, []))
     try:
-        result = explore(
-            ExploreRequest(query="RetryConfig", repo_root=tmp_path),
+        result = search(
+            SearchRequest(query="RetryConfig", repo_root=tmp_path),
             settings,
             client=client,
         )
@@ -589,8 +589,8 @@ def test_symbol_accepts_lexical_evidence_without_python_definition(
         transport=_mock_transport(iter([_message_response(f"{filename}:1")]), []),
     )
     try:
-        result = explore(
-            ExploreRequest(query="RetryConfig", repo_root=tmp_path),
+        result = search(
+            SearchRequest(query="RetryConfig", repo_root=tmp_path),
             settings,
             client=client,
         )
@@ -614,8 +614,8 @@ def test_symbol_preflight_reports_scan_completeness(
         transport=_mock_transport(iter([_message_response(NO_RESULT)]), payloads),
     )
     try:
-        result = explore(
-            ExploreRequest(query="RetryConfig", repo_root=tmp_path),
+        result = search(
+            SearchRequest(query="RetryConfig", repo_root=tmp_path),
             settings,
             client=client,
         )
@@ -640,17 +640,17 @@ def test_symbol_token_limited_completion_filters_evidence(
     client = ChatClient(settings, transport=_mock_transport(iter([response]), []))
     try:
         if valid:
-            result = explore(
-                ExploreRequest(query="RetryConfig", repo_root=tmp_path),
+            result = search(
+                SearchRequest(query="RetryConfig", repo_root=tmp_path),
                 settings,
                 client=client,
             )
             assert result.citations == [Citation("config.py", 1, 1)]
             assert result.truncated
         else:
-            with pytest.raises(ExplorerError, match="without evidence"):
-                explore(
-                    ExploreRequest(query="RetryConfig", repo_root=tmp_path),
+            with pytest.raises(SearchError, match="without evidence"):
+                search(
+                    SearchRequest(query="RetryConfig", repo_root=tmp_path),
                     settings,
                     client=client,
                 )
@@ -671,8 +671,8 @@ def test_symbol_cut_at_read_cap_is_unverified(tmp_path: Path) -> None:
         transport=_mock_transport(iter([_message_response("config.py:1")]), []),
     )
     try:
-        result = explore(
-            ExploreRequest(query="RetryConfig", repo_root=tmp_path),
+        result = search(
+            SearchRequest(query="RetryConfig", repo_root=tmp_path),
             settings,
             client=client,
         )
@@ -690,8 +690,8 @@ def test_scoped_symbol_query_rejects_plausible_home_file(tmp_path: Path) -> None
         transport=_mock_transport(iter([_message_response("src/config.py:1")]), []),
     )
     try:
-        result = explore(
-            ExploreRequest(
+        result = search(
+            SearchRequest(
                 query="Find `RetryConfig` in src/config.py", repo_root=tmp_path
             ),
             settings,

@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from flash_context.agent import explore
+from flash_context.agent import search
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
 from flash_context.types import (
-    ExploreRequest,
-    ExplorerError,
     RawLocation,
+    SearchError,
+    SearchRequest,
 )
 from tests.helpers import (
     _message_response,
@@ -26,8 +26,8 @@ def test_exact_citation_fast_path_skips_endpoint_config(tmp_path: Path) -> None:
     (repo / "agent.py").write_text("line 1\nline 2\n", encoding="utf-8")
     settings = Settings()
 
-    result = explore(
-        ExploreRequest(query="Use agent.py:1-2", repo_root=repo),
+    result = search(
+        SearchRequest(query="Use agent.py:1-2", repo_root=repo),
         settings,
     )
 
@@ -48,8 +48,8 @@ def test_explicit_path_symbol_fast_path_returns_matching_line(
     )
     settings = Settings()
 
-    result = explore(
-        ExploreRequest(
+    result = search(
+        SearchRequest(
             query="In src/config.py, find `max_parallel_tools`.",
             repo_root=repo,
         ),
@@ -71,8 +71,8 @@ def test_explicit_path_symbol_fast_path_ignores_sentence_punctuation(
     )
     settings = Settings()
 
-    result = explore(
-        ExploreRequest(
+    result = search(
+        SearchRequest(
             query='Find "tool_choice" in src/llm.py.',
             repo_root=repo,
         ),
@@ -89,13 +89,13 @@ def test_pathless_unique_definition_fast_path_skips_endpoint(
     repo = tmp_path / "repo"
     (repo / "src").mkdir(parents=True)
     (repo / "src" / "agent.py").write_text(
-        "def explore():\n    pass\n",
+        "def search():\n    pass\n",
         encoding="utf-8",
     )
     settings = Settings()
 
-    result = explore(
-        ExploreRequest(query="Find `explore`", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find `search`", repo_root=repo),
         settings,
     )
 
@@ -109,7 +109,7 @@ def test_pathless_definition_in_markdown_does_not_fast_path(
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "guide.md").write_text(
-        "```python\ndef explore():\n    pass\n```\n",
+        "```python\ndef search():\n    pass\n```\n",
         encoding="utf-8",
     )
     responses: Iterator[dict[str, object]] = iter(
@@ -119,8 +119,8 @@ def test_pathless_definition_in_markdown_does_not_fast_path(
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
-    result = explore(
-        ExploreRequest(query="Find `explore`", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find `search`", repo_root=repo),
         settings,
         client=client,
     )
@@ -143,8 +143,8 @@ def test_denied_explicit_path_does_not_fast_path_or_leak_content(
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
-    result = explore(
-        ExploreRequest(query="Find `SECRET` in .env", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find `SECRET` in .env", repo_root=repo),
         settings,
         client=client,
     )
@@ -170,8 +170,8 @@ def test_bare_path_returns_bounded_preview_without_endpoint(
     file = tmp_path / path
     file.parent.mkdir(exist_ok=True)
     file.write_text("one\ntwo\nthree\n")
-    result = explore(
-        ExploreRequest(query=query, repo_root=tmp_path), Settings(max_read_lines=2)
+    result = search(
+        SearchRequest(query=query, repo_root=tmp_path), Settings(max_read_lines=2)
     )
     assert result.turns_used == 0
     assert result.answer == f"{path}:1-2"
@@ -183,16 +183,16 @@ def test_bare_path_returns_bounded_preview_without_endpoint(
 def test_unusable_bare_path_retains_model_routing(tmp_path: Path, query: str) -> None:
     (tmp_path / "empty.py").touch()
     (tmp_path / ".env.local").write_text("SECRET")
-    with pytest.raises(ExplorerError, match="CONFIG_MISSING_ENDPOINT") as error:
-        explore(ExploreRequest(query=query, repo_root=tmp_path), Settings())
+    with pytest.raises(SearchError, match="CONFIG_MISSING_ENDPOINT") as error:
+        search(SearchRequest(query=query, repo_root=tmp_path), Settings())
     assert "SECRET" not in str(error.value)
 
 
 def test_unique_definition_ignores_reference_match_cap(tmp_path: Path) -> None:
     (tmp_path / "a_refs.py").write_text("ref = BaseTransport\n" * 20)
     (tmp_path / "z_base.py").write_text("class BaseTransport:\n    pass\n")
-    result = explore(
-        ExploreRequest(query="BaseTransport", repo_root=tmp_path), Settings()
+    result = search(
+        SearchRequest(query="BaseTransport", repo_root=tmp_path), Settings()
     )
     assert result.turns_used == 0
     assert result.answer == "z_base.py:1"
@@ -207,16 +207,16 @@ def test_unique_definition_requires_complete_unambiguous_source_and_stubs(
         (tmp_path / "z.py").write_text("# padding\n" * 20)
     else:
         (tmp_path / "a.pyi").write_text("class Target: ...\n")
-    with pytest.raises(ExplorerError, match="CONFIG_MISSING_ENDPOINT"):
-        explore(
-            ExploreRequest(query="Target", repo_root=tmp_path),
+    with pytest.raises(SearchError, match="CONFIG_MISSING_ENDPOINT"):
+        search(
+            SearchRequest(query="Target", repo_root=tmp_path),
             Settings(max_scan_bytes=30 if incomplete else 1000),
         )
 
 
 def test_exact_documentation_path_stays_endpoint_free(tmp_path: Path) -> None:
     (tmp_path / "guide.md").write_text("Handler overview\n")
-    result = explore(ExploreRequest(query="guide.md:1", repo_root=tmp_path), Settings())
+    result = search(SearchRequest(query="guide.md:1", repo_root=tmp_path), Settings())
     assert result.turns_used == 0
     assert result.answer == "guide.md:1"
     assert not result.warnings

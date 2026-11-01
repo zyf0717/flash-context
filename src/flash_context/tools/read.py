@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from flash_context.tools.safety import PathSafety, ScanBudget, ScanLimits
-from flash_context.types import Diagnostic, ExplorerError, ToolObservation
+from flash_context.types import Diagnostic, SearchError, ToolObservation
 
 
 def read_file(
@@ -18,18 +18,18 @@ def read_file(
     preview: bool = False,
 ) -> ToolObservation:
     if not path:
-        raise ExplorerError("INVALID_TOOL_ARGUMENTS", "path is required")
+        raise SearchError("INVALID_TOOL_ARGUMENTS", "path is required")
     if start_line is not None and start_line <= 0:
-        raise ExplorerError("INVALID_TOOL_ARGUMENTS", "start_line must be positive")
+        raise SearchError("INVALID_TOOL_ARGUMENTS", "start_line must be positive")
     if end_line is not None and end_line <= 0:
-        raise ExplorerError("INVALID_TOOL_ARGUMENTS", "end_line must be positive")
+        raise SearchError("INVALID_TOOL_ARGUMENTS", "end_line must be positive")
     if start_line is not None and end_line is not None and end_line < start_line:
-        raise ExplorerError(
+        raise SearchError(
             "INVALID_TOOL_ARGUMENTS",
             "end_line must be greater than or equal to start_line",
         )
     if max_bytes <= 0:
-        raise ExplorerError("CONFIG_INVALID", "max_bytes must be positive")
+        raise SearchError("CONFIG_INVALID", "max_bytes must be positive")
 
     safety = PathSafety(repo_root, tuple(ignore or ()))
     resolved = safety.resolve_existing_file(path)
@@ -70,17 +70,17 @@ def read_file(
                 budget.consume(size=len(extra))
                 truncated = bool(extra)
     except OSError as exc:
-        raise ExplorerError(
+        raise SearchError(
             "PATH_UNREADABLE", "Repository file could not be read"
         ) from exc
-    except ExplorerError:
+    except SearchError:
         if actual_last is None:
             raise
         truncated = True
         budget.warnings.append(Diagnostic.READ_LIMIT)
 
     if actual_last is None:
-        raise ExplorerError(
+        raise SearchError(
             "INVALID_TOOL_ARGUMENTS",
             "Requested start_line is beyond the end of file",
             details={

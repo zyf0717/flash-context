@@ -5,7 +5,7 @@ from typing import Any
 import httpx
 
 from flash_context.config import Settings
-from flash_context.types import ExplorerError, JsonObject
+from flash_context.types import JsonObject, SearchError
 
 
 class ChatClient:
@@ -46,20 +46,20 @@ class ChatClient:
             response = self._client.post(url, headers=headers, json=payload)
             response.raise_for_status()
         except httpx.TimeoutException as exc:
-            raise ExplorerError(
+            raise SearchError(
                 "ENDPOINT_TIMEOUT",
                 "Endpoint request timed out",
                 retryable=True,
             ) from exc
         except httpx.HTTPStatusError as exc:
-            raise ExplorerError(
+            raise SearchError(
                 "ENDPOINT_BAD_RESPONSE",
                 "Endpoint returned an unsuccessful status",
                 retryable=500 <= exc.response.status_code < 600,
                 details={"status_code": exc.response.status_code},
             ) from exc
         except httpx.HTTPError as exc:
-            raise ExplorerError(
+            raise SearchError(
                 "ENDPOINT_UNREACHABLE",
                 "Endpoint request failed",
                 retryable=True,
@@ -68,12 +68,12 @@ class ChatClient:
         try:
             data = response.json()
         except ValueError as exc:
-            raise ExplorerError(
+            raise SearchError(
                 "ENDPOINT_BAD_RESPONSE",
                 "Endpoint returned invalid JSON",
             ) from exc
         if not isinstance(data, dict):
-            raise ExplorerError(
+            raise SearchError(
                 "ENDPOINT_BAD_RESPONSE",
                 "Endpoint response must be a JSON object",
             )
