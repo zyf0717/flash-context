@@ -197,6 +197,10 @@ Do not let `README.md`, specs, contracts, and implementation drift apart.
 
 ## Agent Working Style
 
+Submit changes from a `dev/` branch through a pull request to `main`.
+Use squash or rebase merging after required CI checks pass. Do not push directly
+to `main` or use the owner's bypass unless the owner explicitly requests it.
+
 Prefer implementation that is simple, typed, testable, and easy to inspect.
 
 Before adding abstractions, check whether they are required by the active specs.
