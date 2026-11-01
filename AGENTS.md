@@ -2,116 +2,25 @@
 
 These instructions apply to the entire repository.
 
-## Role of This File
+## Product and architecture
 
-This file defines durable guidance for agents working on `flash-context`.
+Build a Python read-only context explorer: thin CLI/MCP adapters → shared core →
+OpenAI-compatible chat completions → root-scoped `read_file`/`repo_glob`/`repo_grep`.
+Keep configuration, endpoint access, safety, evidence resolution, orchestration,
+and diagnostic logging cohesive. Prefer typed boundaries and simple explicit
+flow; do not add RAG infrastructure or write-capable repository tools.
 
-It is not the detailed implementation plan. Feature requirements, contracts,
-task ordering, schemas, and exact interface details should live in `specs/`,
-`docs/`, contracts, and tests.
+Current sources of truth:
 
-When there is a conflict:
+- `docs/contracts.md`: shared evidence, payloads, tools, safety, termination.
+- `docs/cli.md`, `docs/mcp.md`: adapter-specific behavior.
+- `docs/configuration.md`: settings and precedence.
+- `README.md`: installation and getting started.
+- `specs/README.md`: proposal status and historical specs; completed plans are not
+  current contracts. New architectural scope needs a spec before implementation.
 
-1. Security invariants in this file take precedence.
-2. Active specs and public contracts define intended behavior.
-3. Code and tests define implemented behavior.
-4. Documentation must be updated to reflect public behavior changes.
-
-Do not treat examples in this file as exhaustive or permanently fixed unless
-they are stated as invariants.
-
-## Project Contract
-
-`flash-context` is a Python read-only context explorer for AI agents, currently
-focused on codebases and repositories. Exploration also applies to documentation,
-configuration, and other local text files within a selected root.
-
-The intended product shape is:
-
-```text
-CLI / MCP adapter
-        |
-        v
-shared exploration core
-        |
-        v
-OpenAI-compatible endpoint
-        |
-        v
-root-scoped local read-only tools
-```
-
-The CLI is the MVP path unless the active specs say otherwise. MCP should be an
-adapter over the shared core, not a separate implementation or primary
-abstraction.
-
-The project is not a generic RAG framework, context-pack generator, or
-MCP-first tool collection unless the specs are explicitly changed.
-
-## Primary Sources of Truth
-
-Use these locations for detailed product and implementation guidance:
-
-* `specs/` for feature specs, plans, tasks, and contracts.
-* `docs/implementation-order.md` for current sequencing and phase guidance.
-* `docs/` for durable human-facing documentation.
-* `README.md` for public project overview and usage.
-
-Spec folders may use numbered names such as `001-something`,
-`002-something-else`, and so on. The number is a stable spec identifier and
-rough creation-order marker, not a permanent priority signal.
-
-Do not assume `001-*` is always the current or only active spec. Determine the
-active implementation scope from spec status, task files, and
-`docs/implementation-order.md`.
-
-Keep `README.md`, specs, contracts, tests, and user-facing docs aligned when
-changing public behavior.
-
-## Scope Boundaries
-
-Follow the active specs unless the user explicitly redirects.
-
-Do not introduce major new product shapes without updating specs first. In
-particular:
-
-* Do not build an MCP-first implementation if the active spec says CLI-first.
-* Do not duplicate CLI and MCP logic; both should delegate to the shared core.
-* Do not add extra MVP tools or product concepts unless the active specs call
-  for them.
-* Do not add an OKF bundle or `.specify/` scaffold unless explicitly requested.
-* Do not turn local repository tools into write-capable tools.
-
-Prefer small, inspectable implementation steps that preserve the documented
-architecture.
-
-## Architecture Principles
-
-Use a single coherent Python package for the implementation.
-
-Keep these concerns separated:
-
-* user interfaces, such as CLI and MCP adapters
-* shared exploration orchestration
-* LLM/OpenAI-compatible endpoint client
-* configuration loading and precedence
-* repository safety validation
-* read-only repository tools
-* typed request/result/error models
-* trajectory or diagnostic logging
-
-CLI and MCP entrypoints should stay thin. They should parse input, call the
-shared core, and render or return the result.
-
-Filesystem safety should be centralized rather than reimplemented separately by
-each tool.
-
-Prefer typed data models for public and internal boundaries, including requests,
-results, tool calls, observations, citations, settings, and structured errors.
-
-The first backend target is an OpenAI-compatible chat-completions style
-exploration loop unless the active specs say otherwise. Do not assume a ranked
-context-search endpoint unless the specs change.
+Security invariants below take precedence, then current contracts/active specs,
+then code/tests. Explicit user instructions override workflow defaults.
 
 ## Security Invariants
 
@@ -140,23 +49,6 @@ filesystem operations outside the approved read-only tool set.
 
 Security behavior should be tested, not merely documented.
 
-## Public Interfaces
-
-Public interfaces are defined in the active specs and contracts.
-
-At minimum, the project is expected to expose:
-
-* a CLI exploration path
-* JSON-compatible output for machine use
-* configuration through environment variables and/or project config
-* an MCP adapter that preserves the shared core result/error shape
-
-Do not change public behavior without updating the relevant contract, tests,
-README, and user-facing docs.
-
-Detailed flags, environment variables, config precedence, MCP schema, and error
-formats belong in the contracts and specs.
-
 ## Testing Requirements
 
 Add or update tests with implementation changes. Safety and contract behavior
@@ -182,18 +74,10 @@ the project docs and CI configuration.
 
 ## Documentation Discipline
 
-When changing public behavior, update the relevant source of truth.
-
-Use this general mapping:
-
-* CLI behavior: update CLI contract, quickstart, README, and tests.
-* Local repository tools: update explorer-tool contracts and safety tests.
-* MCP behavior: update MCP contract and delegation tests.
-* Configuration behavior: update config contract/docs and precedence tests.
-* Phase order or implementation scope: update `docs/implementation-order.md`
-  and the relevant spec task files.
-
-Do not let `README.md`, specs, contracts, and implementation drift apart.
+Update the canonical contract and affected examples/tests when changing public
+behavior. Shared rules belong in `docs/contracts.md`; adapter/configuration docs
+link there. Preserve historical specs through the history index and Git instead
+of repeating completed plans or release-specific policy across current docs.
 
 Record user-visible changes and migration instructions in `CHANGELOG.md` under
 `[Unreleased]`. A version-bump PR promotes these notes to a dated version entry.
@@ -208,17 +92,6 @@ to `main` or use the owner's bypass unless the owner explicitly requests it.
 
 Prefer implementation that is simple, typed, testable, and easy to inspect.
 
-Before adding abstractions, check whether they are required by the active specs.
-Before changing architecture, update the relevant plan/spec first or clearly
-explain why the existing plan is obsolete.
-
-When uncertain, preserve these defaults:
-
-* CLI-first MVP
-* shared core
-* MCP as adapter
-* read-only local tools
-* OpenAI-compatible endpoint
-* root-scoped safety
-* tests with mocked external services
-* documentation updated with public behavior
+Review the diff before finalizing: remove redundant checks, dead options,
+forwarding helpers, and duplicate documentation. Keep changes executable and
+verify the checks documented in CONTRIBUTING.md.

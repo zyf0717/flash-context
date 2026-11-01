@@ -9,7 +9,7 @@ from flash_context.agent import explore
 from flash_context.citations import CitationResolver
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
-from flash_context.types import ExploreRequest, ExplorerError
+from flash_context.types import Citation, ExploreRequest, ExplorerError
 
 SAMPLES = {
     "py": "def sample():\n    return 1\n",
@@ -41,8 +41,8 @@ def test_major_language_symbols(
     path = f"example.{extension}"
     (tmp_path / path).write_text(source)
     resolver = CitationResolver(tmp_path, Settings(), None)
-    citation = resolver.resolve(path, symbol="sample")
-    assert citation is not None, resolver.feedback
+    citation = _citation(resolver, path, symbol="sample")
+    assert citation is not None
     assert citation.precision is not None
     assert citation.precision.boundary_kind == "definition"
 
@@ -58,7 +58,9 @@ def test_httpx_redirects() -> None:
         "BaseClient._redirect_stream",
         "Client._send_handling_redirects",
     ]
-    citations = resolver.parse("\n".join("httpx/_client.py#" + s for s in symbols))
+    citations = resolver.parse(
+        "\n".join("httpx/_client.py#" + s for s in symbols)
+    ).citations
     assert len(citations) == 6
     assert sum(c.precision.range_lines for c in citations if c.precision) == 140
     source = resolver.source("httpx/_client.py")
@@ -70,15 +72,15 @@ def test_httpx_redirects() -> None:
         )
         == 15
     )
-    assert resolver.parse("httpx/_client.py:470-1000") == []
+    assert resolver.parse("httpx/_client.py:470-1000").citations == []
 
 
 def test_large_definition_line_and_header(tmp_path: Path) -> None:
     (tmp_path / "a.py").write_text("def large():\n" + "    x = 1\n" * 130)
     resolver = CitationResolver(tmp_path, Settings(), None)
-    assert resolver.resolve("a.py", symbol="large") is None
-    assert resolver.resolve("a.py", line=70).label() == "a.py:70"  # type: ignore[union-attr]
-    assert resolver.resolve("a.py", line=1).end_line == 1  # type: ignore[union-attr]
+    assert _citation(resolver, "a.py", symbol="large") is None
+    assert _citation(resolver, "a.py", line=70).label() == "a.py:70"  # type: ignore[union-attr]
+    assert _citation(resolver, "a.py", line=1).end_line == 1  # type: ignore[union-attr]
 
 
 def test_ambiguity_and_adjacent_definitions(tmp_path: Path) -> None:
@@ -86,8 +88,8 @@ def test_ambiguity_and_adjacent_definitions(tmp_path: Path) -> None:
         "class A:\n    def f(self): pass\nclass B:\n    def f(self): pass\n"
     )
     resolver = CitationResolver(tmp_path, Settings(), None)
-    assert resolver.resolve("a.py", symbol="f") is None
-    assert len(resolver.parse("a.py#A.f\na.py#B.f")) == 2
+    assert _citation(resolver, "a.py", symbol="f") is None
+    assert len(resolver.parse("a.py#A.f\na.py#B.f").citations) == 2
 
 
 @pytest.mark.parametrize("path", ["../secret.py", ".env", "escape.py"])
@@ -97,17 +99,18 @@ def test_parser_safety(tmp_path: Path, path: str) -> None:
     (tmp_path / ".env").write_text("SECRET=1")
     (tmp_path / "escape.py").symlink_to(secret)
     resolver = CitationResolver(tmp_path, Settings(), None)
-    assert resolver.resolve(path, symbol="secret") is None
-    assert "SECRET" not in str(resolver.feedback)
+    assert _citation(resolver, path, symbol="secret") is None
+    assert "SECRET" not in str(resolver.parse(path + "#secret").feedback)
 
 
 def test_budgets_and_deduplication(tmp_path: Path) -> None:
     (tmp_path / "a.py").write_text("def a():\n    pass\ndef b():\n    pass\n")
     resolver = CitationResolver(tmp_path, Settings(max_total_citation_lines=2), None)
-    assert len(resolver.parse("a.py#a\na.py#a\na.py#b")) == 1
-    assert resolver.feedback
+    resolution = resolver.parse("a.py#a\na.py#a\na.py#b")
+    assert len(resolution.citations) == 1
+    assert resolution.feedback
     limited = CitationResolver(tmp_path, Settings(max_parse_bytes=4), None)
-    assert limited.resolve("a.py", symbol="a") is None
+    assert _citation(limited, "a.py", symbol="a") is None
 
 
 def test_range_repair_and_no_fallback_bypass(tmp_path: Path) -> None:
@@ -196,13 +199,13 @@ def test_decorators_crlf_and_exact_tokens(tmp_path: Path) -> None:
         b'@cache\r\ndef f():\r\n    return "\xc2\x85value"\r\n'
     )
     resolver = CitationResolver(tmp_path, Settings(), "f")
-    citation = resolver.resolve("a.py", symbol="f")
+    citation = _citation(resolver, "a.py", symbol="f")
     assert citation is not None and citation.label() == "a.py:1-3"
     assert citation.precision is not None
     assert citation.precision.query_token_in_range is True
     wrong = CitationResolver(tmp_path, Settings(), "F")
-    assert wrong.resolve("a.py", symbol="f") is None
-    assert resolver.parse("/a.py#f") == []
+    assert _citation(wrong, "a.py", symbol="f") is None
+    assert resolver.parse("/a.py#f").citations == []
 
 
 def test_prose_uses_resolved_labels(tmp_path: Path) -> None:
@@ -244,5 +247,16 @@ def test_impl_scopes(tmp_path: Path) -> None:
         "struct A;\nimpl A { fn f() {} }\nstruct B;\nimpl B { fn f() {} }\n"
     )
     resolver = CitationResolver(tmp_path, Settings(), None)
-    assert resolver.resolve("a.rs", symbol="f") is None
-    assert resolver.resolve("a.rs", symbol="A.f") is not None
+    assert _citation(resolver, "a.rs", symbol="f") is None
+    assert _citation(resolver, "a.rs", symbol="A.f") is not None
+
+
+def _citation(
+    resolver: CitationResolver,
+    path: str,
+    *,
+    symbol: str | None = None,
+    line: int | None = None,
+) -> Citation | None:
+    result = resolver.parse(f"{path}#{symbol}" if symbol else f"{path}:{line}")
+    return result.citations[0] if result.citations else None

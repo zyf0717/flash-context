@@ -12,7 +12,13 @@ from flash_context import cli
 from flash_context import config as config_module
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
-from flash_context.types import Citation, ExploreRequest, ExploreResult, RawLocation
+from flash_context.types import (
+    Citation,
+    Diagnostic,
+    ExploreRequest,
+    ExploreResult,
+    RawLocation,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -447,7 +453,7 @@ def test_cli_documentation_fallback_keeps_evidence_and_warns(
             citations=[Citation("guide.md", 1, 1)],
             turns_used=6,
             truncated=True,
-            warnings=[warning],
+            warnings=[Diagnostic(warning)],
             raw_locations=[RawLocation("guide.md", 1, 1, "Overview\n")],
         )
 
@@ -520,3 +526,57 @@ def test_cli_missing_symbol_retains_empty_result_and_warning(
         assert result["citations"] == result["raw_locations"] == []
     else:
         assert output.out == "NO_CITATIONS_FOUND\n"
+
+
+@pytest.mark.parametrize(
+    "diagnostic", [Diagnostic.PARSER_INPUT_LIMIT, Diagnostic.PARSER_TIMEOUT]
+)
+def test_empty_parser_limited_result_exits_six(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    diagnostic: Diagnostic,
+) -> None:
+    def core(request: ExploreRequest, settings: Settings) -> ExploreResult:
+        return ExploreResult(
+            request.query,
+            str(tmp_path),
+            "NO_CITATIONS_FOUND",
+            [],
+            1,
+            truncated=True,
+            warnings=[diagnostic],
+        )
+
+    monkeypatch.setattr(cli, "explore", core)
+    assert (
+        cli.main(["explore", "--repo", str(tmp_path), "--query", "Where is behavior?"])
+        == 6
+    )
+    assert str(diagnostic) in capsys.readouterr().err
+
+
+def test_no_citation_enables_prose(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def core(request: ExploreRequest, settings: Settings) -> ExploreResult:
+        assert not request.citation
+        return ExploreResult(
+            request.query, str(tmp_path), "Found a.py:1", [Citation("a.py", 1, 1)], 1
+        )
+
+    monkeypatch.setattr(cli, "explore", core)
+    assert (
+        cli.main(
+            [
+                "explore",
+                "--repo",
+                str(tmp_path),
+                "--query",
+                "Where is behavior?",
+                "--no-citation",
+            ]
+        )
+        == 0
+    )
+    assert capsys.readouterr().out == "Found a.py:1\n"

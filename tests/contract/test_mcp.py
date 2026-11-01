@@ -15,7 +15,13 @@ from flash_context.agent import explore
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
 from flash_context.mcp_server import explore_repository_handler
-from flash_context.types import Citation, ExploreRequest, ExploreResult, RawLocation
+from flash_context.types import (
+    Citation,
+    Diagnostic,
+    ExploreRequest,
+    ExploreResult,
+    RawLocation,
+)
 
 
 @pytest.mark.parametrize(
@@ -42,7 +48,7 @@ def test_mcp_handler_delegates_to_core(tmp_path: Path, warning: str) -> None:
             ],
             turns_used=1,
             truncated=True,
-            warnings=[warning],
+            warnings=[Diagnostic(warning)],
         )
 
     result = explore_repository_handler(

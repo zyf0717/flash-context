@@ -13,7 +13,7 @@ source snippets.
 
 CLI and MCP share a read-only core for exploring code, documentation,
 configuration, and other local text files with path safety and resource limits.
-See [safety and evidence validation](docs/architecture.md#safety-and-evidence-validation)
+See [safety and evidence validation](docs/contracts.md#read-only-tools-and-safety)
 for details and limitations.
 
 Inspired by [FastContext](https://arxiv.org/abs/2606.14066), a now-withdrawn paper
@@ -44,10 +44,10 @@ Default output is repository-relative citations:
 src/api/validation.py:42-88
 ```
 
-Use `--format json` for structured results with source snippets, or
+Use `--no-citation` for prose, `--format json` for results with snippets, or
 `--max-turns 6` to set the exploration limit. Exact path and unique symbol
 lookups can resolve locally without an endpoint. See the
-[CLI contract](specs/001-flash-context-explorer/contracts/cli.md) for options,
+[CLI contract](docs/cli.md) for options,
 output schemas, and exit codes.
 
 For example, `--query 'httpx/_client.py'` returns a bounded file preview, while
@@ -57,6 +57,10 @@ Python source/stub scan. Local successes report `turns_used: 0` in JSON.
 Warnings go to stderr in both output formats. An empty result after scan-budget
 exhaustion exits **6** while preserving stdout; a complete empty search exits
 **0**. For large repositories, see [scan-budget tuning](docs/configuration.md#large-repositories).
+
+Models select symbol or line anchors; the controller resolves bounded syntax
+regions and returns structural precision metadata. See the
+[shared contract](docs/contracts.md) for evidence rules and limits.
 
 ## MCP
 
@@ -78,10 +82,3 @@ See [MCP integration](docs/mcp.md) for editor configuration and source launches.
 ## License
 
 [Apache License 2.0](LICENSE).
-
-## Citation precision in v0.4.0
-
-Models select symbol or single-line anchors; the controller computes boundaries
-and enforces line budgets. Distinct definitions remain separate. JSON citations
-add structural `precision` metadata. Unselected reads are no longer returned as
-fallback citations. See [configuration](docs/configuration.md) for configuration, compatibility and parser coverage.

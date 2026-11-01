@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Iterator
 from pathlib import Path
-
-import httpx
 
 from flash_context.agent import explore
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
 from flash_context.types import ExploreRequest
+from tests.helpers import _message_response, _mock_transport, _tool_response
 
 
 def test_fixture_repository_returns_validation_citation() -> None:
@@ -37,50 +35,3 @@ def test_fixture_repository_returns_validation_citation() -> None:
         "src/api/validation.py",
         "tests/test_validation.py",
     ]
-
-
-def _mock_transport(responses: Iterator[dict[str, object]]) -> httpx.MockTransport:
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=next(responses))
-
-    return httpx.MockTransport(handler)
-
-
-def _tool_response(
-    call_id: str,
-    name: str,
-    arguments: dict[str, object],
-) -> dict[str, object]:
-    return {
-        "choices": [
-            {
-                "message": {
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [
-                        {
-                            "id": call_id,
-                            "type": "function",
-                            "function": {
-                                "name": name,
-                                "arguments": json.dumps(arguments),
-                            },
-                        }
-                    ],
-                }
-            }
-        ]
-    }
-
-
-def _message_response(content: str) -> dict[str, object]:
-    return {
-        "choices": [
-            {
-                "message": {
-                    "role": "assistant",
-                    "content": content,
-                }
-            }
-        ]
-    }

@@ -9,13 +9,6 @@ export FLASH_CONTEXT_MODEL=your-model
 ```
 
 The endpoint must support OpenAI-compatible chat completions and tool calls.
-Exact path or uniquely defined symbol queries can complete locally without an
-endpoint when the controller can validate the citation deterministically.
-Bare paths, optionally quoted, return previews bounded by
-`FLASH_CONTEXT_MAX_READ_BYTES` and `FLASH_CONTEXT_MAX_READ_LINES`. Symbol lookups
-count definitions rather than references, and require complete, unambiguous
-Python source/stub coverage within the scan limits.
-
 Installed commands do not discover YAML or `.env` files in the installation
 directory, working directory, or target repository.
 
@@ -63,44 +56,20 @@ The [example YAML](../config.yaml.example) and
 | `FLASH_CONTEXT_MAX_COMPLETION_TOKENS` | `512` | Completion token cap |
 | `FLASH_CONTEXT_TEMPERATURE` | `0` | Model sampling temperature |
 | `FLASH_CONTEXT_MAX_PARALLEL_TOOLS` | `4` | Same-turn local tool worker cap |
-
-Independent same-turn local tool calls run concurrently; endpoint requests
-remain serial. Observation, read, and completion caps bound prompt growth and
-reduce latency variance.
-
-See [spec 006](../specs/006-project-root-yaml-dotenv-config/spec.md) for the
-configuration contract and [CLI contract](../specs/001-flash-context-explorer/contracts/cli.md)
-for options and error codes.
-
-## Local execution budgets and diagnostics
-
-Tool settings also accept these environment variables (and matching snake_case
-keys under YAML `tools`, with the existing precedence):
-
-| Environment variable | Default | Purpose |
-| --- | --- | --- |
-| `FLASH_CONTEXT_MAX_SCAN_BYTES` | `16777216` | Bytes scanned per tool, including skipped lines |
+| `FLASH_CONTEXT_MAX_SCAN_BYTES` | `16777216` | Bytes scanned per tool; cumulative parser bytes |
 | `FLASH_CONTEXT_MAX_SCAN_ENTRIES` | `10000` | Directory entries examined per tool |
-| `FLASH_CONTEXT_TOOL_TIMEOUT_SECONDS` | `5` | Cooperative scan deadline and regex match timeout |
+| `FLASH_CONTEXT_TOOL_TIMEOUT_SECONDS` | `5` | Scan, regex, and parser deadline |
 | `FLASH_CONTEXT_MAX_TOOL_CALLS_PER_TURN` | `16` | Maximum model tool batch size |
+| `FLASH_CONTEXT_MAX_CITATION_LINES` | `120` | Lines per model citation |
+| `FLASH_CONTEXT_MAX_TOTAL_CITATION_LINES` | `240` | Unique model-cited file-lines |
+| `FLASH_CONTEXT_MAX_PARSE_BYTES` | `1048576` | Parser input bytes per file |
 
-Limits apply to preflight, model tools, citation verification, and snippet
-extraction. Budget exhaustion returns partial observations with truncation and
-warnings; a read that cannot reach its starting line returns `TOOL_LIMIT_EXCEEDED`.
-Grep uses regex compatibility mode, accepts patterns up to 4096 characters, and
-skips lines over 64 KiB with a warning. Directory symlinks are not traversed;
-file symlinks are checked at both requested and resolved paths and deduplicated.
-Literal search paths are resolved directly, and scoped globs start at their
-literal directory prefix, so unrelated trees do not consume their scan budgets.
-Deadlines bound processing and matching, but cannot interrupt stalled kernel I/O.
-
-The CLI prints result warnings to stderr for both text and JSON output, or a
-generic warning for truncation without a more specific diagnostic. If no
-citations are found after scan-byte/entry budget exhaustion or a tool processing
-timeout, it exits 6 while preserving the result on stdout. Partial cited results
-and complete empty searches exit 0. JSON and MCP retain `truncated` and `warnings`;
-MCP returns the shared result without CLI exit semantics. A capped initial file
-sample is normal; actual sample scan failures propagate into the result.
+YAML uses the same names in snake_case: endpoint settings under `model`,
+turn/citation limits and ignores under `explorer`, other limits under `tools`.
+See the example YAML for the exact layout. Numeric limits must be positive and
+finite; temperature may be zero. Endpoint settings are required only for model
+exploration. [The shared contract](contracts.md) defines evidence and diagnostic
+behavior; [CLI](cli.md) defines exit codes.
 
 ### Large repositories
 
@@ -131,64 +100,3 @@ failures become result warnings. Existing log files are left untouched.
 Tool entries use `content_length` for read content, `hit_count` for grep hits,
 and `match_count` for glob paths. Irrelevant counters are omitted, so a grep
 result is not described as empty read content.
-
-## Exploration progress and evidence
-
-For implementation-intent questions, documentation-only citations are provisional:
-the controller requests source evidence within the remaining turn budget. If only
-documentation remains at termination, citations and snippets are retained with
-`truncated: true` and an implementation-unverified warning. Detection uses query
-terms and common documentation filenames; it does not establish semantic relevance.
-Explicit documentation requests and exact lookups retain their existing behavior.
-Repeated calls reuse observations while fresh sibling calls execute; an entirely
-repeated batch stops exploration. Resource limits and result schemas are unchanged.
-
-Build outputs such as `dist/` remain excluded regardless of scan budgets.
-Inspect an allowed source checkout when implementation exists only in a bundle.
-
-## Exact-symbol evidence
-
-Conservative exact-identifier lookups, including a scoped path plus identifier,
-require the case-sensitive whole query token inside every accepted cited range.
-The controller checks cached source lines or performs a safe bounded read;
-filenames, nearby lines, substrings, and byte-capped partial tokens do not qualify.
-The same check applies to read-derived fallback evidence and early termination.
-References, assignments, documentation, and other languages remain eligible;
-this lexical guarantee does not establish a definition or semantic relevance.
-Bare file previews, explicit citation requests, and semantic queries retain their
-existing behavior.
-
-Python source/stub preflight results distinguish unique, missing, ambiguous, and
-incomplete definitions. The model receives this result without a second scan.
-A complete missing result establishes zero Python definition-pattern matches,
-not repository-wide absence. Incomplete scans retain their limit diagnostics.
-
-Unsupported citations trigger focused feedback within the existing turn budget.
-An explicit `NO_CITATIONS_FOUND` ends the search without promoting previous reads.
-Normal termination without accepted evidence returns `NO_CITATIONS_FOUND`, empty
-`citations` and `raw_locations`, and `query symbol not found in verified evidence`,
-even in non-citation mode. Actual scan, turn, and token-limit diagnostics remain
-separate. CLI exit semantics and public schemas are unchanged; token exhaustion
-without usable evidence remains `ENDPOINT_BAD_RESPONSE`.
-
-## Controller-owned citation boundaries (v0.4.0)
-
-Models select `path#qualified.symbol` or `path:line` anchors; the shared core
-computes safe syntax boundaries. Public CLI/MCP file-line labels remain unchanged.
-Model ranges receive one correction opportunity within existing turns. Unselected
-read observations are no longer promoted to final evidence. Adjacent definitions
-remain separate; explicit user-requested ranges and deterministic local lookups
-retain their existing behavior.
-
-JSON citations add `precision`: inclusive `range_lines`, `boundary_kind`, nullable
-`symbol`, nullable `query_token_in_range` (exact queries only), and nullable
-`definitions_spanned` (complete named definitions contained in the range).
-Null means unavailable, not a negative result. These checks do not prove relevance.
-Unsupported/unparseable files use bounded line windows and cannot resolve symbols.
-
-Settings follow existing precedence: `explorer.max_citation_lines` (120),
-`explorer.max_total_citation_lines` (240), and `tools.max_parse_bytes` (1048576).
-Their environment names are `FLASH_CONTEXT_MAX_CITATION_LINES`,
-`FLASH_CONTEXT_MAX_TOTAL_CITATION_LINES`, and `FLASH_CONTEXT_MAX_PARSE_BYTES`.
-Parser input is local-only and separate from returned snippet byte caps.
-See spec 012 and `benchmarks/README.md` for the full behavior and opt-in trends.

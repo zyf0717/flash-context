@@ -62,6 +62,7 @@ include = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 norecursedirs = ["tests/fixtures"]
 markers = [
   "e2e: endpoint-backed opt-in end-to-end tests",

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from flash_context.tools.safety import PathSafety, ScanBudget, ScanLimits
-from flash_context.types import ExplorerError, ToolObservation
+from flash_context.types import Diagnostic, ExplorerError, ToolObservation
 
 
 def repo_glob(
@@ -31,7 +31,7 @@ def repo_glob(
     except ExplorerError as exc:
         if exc.code != "TOOL_LIMIT_EXCEEDED":
             raise
-        budget.warnings.append("glob scan budget exhausted")
+        budget.warnings.append(Diagnostic.GLOB_LIMIT)
     return ToolObservation(
         matches=matches,
         truncated=truncated or bool(budget.warnings),

@@ -324,7 +324,7 @@ def test_short_preview_and_partial_completion(tmp_path: Path) -> None:
 
 
 def test_array_observation_caps_and_logging_failure(tmp_path: Path) -> None:
-    from flash_context.agent import _model_observation_payload
+    from flash_context.execution import _model_observation_payload
     from flash_context.types import Citation, ExploreResult
 
     observation = ToolObservation(

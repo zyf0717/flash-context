@@ -1,41 +1,20 @@
-# Controller-owned citation boundaries — v0.4.0
+# 012: Controller-owned citation boundaries — v0.4.0
 
-Status: implemented
+Status: implemented. Current behavior: [shared contract](../../docs/contracts.md).
 
-Supersedes model-selected range and read-fallback behavior in specs 002–004,
-and the unconditional merging rule in 007. Public file-line labels remain.
+Models select anchors; code resolves bounded syntax and emits precision metadata.
+This supersedes model-selected ranges/read fallback in 002–004 and unconditional
+merging in 007. Local explicit lookups retain endpoint-free behavior.
 
-Models propose `path#qualified.symbol` or `path:line`; ranges are rejected with
-one correction opportunity within existing turns. A bundled Tree-sitter pack
-resolves definitions, declarations and syntax regions. Qualified names use dots;
-ambiguous overloads require a line anchor. Whole definitions include decorators
-and export wrappers. Oversized definitions require line anchors, resolved to
-complete statements/blocks or definition headers. Unknown or unparseable files
-support line windows of ±5 lines; truncated trailing lines are excluded.
+The v0.4.0 simplification also replaces mutable resolver feedback with per-turn
+results, preserves anchor provenance and source snapshots, standardizes source
+lines, uses diagnostic identities for control flow, classifies queries once, and
+consolidates numeric configuration parsing. Completed planning documents are
+indexed in [spec history](../README.md), rather than competing with current rules.
 
-Defaults: 120 lines per model citation, 240 unique cited file-lines total,
-12 final citations, 16 candidate anchors, 1 MiB parser input per file. Cumulative
-parser input obeys max_scan_bytes and parsing/traversal obey tool deadlines.
-Paths and contents pass existing safety checks. Parsing never downloads grammars
-or sends full parser input to the model. Cache lifetime is one exploration.
-
-All termination paths accept resolved anchors or exact-token-derived anchors;
-raw read ranges cannot bypass validation. Distinct syntax units stay separate.
-Explicit user ranges, previews and deterministic exact lookups retain their
-existing endpoint-free behavior and byte limits. They are exempt from model
-precision budgets. Raw snippets remain subject to max_read_bytes.
-
-Citation precision adds inclusive range_lines, boundary_kind, optional qualified
-symbol, optional whole exact-query-token presence, and optional count of complete
-named definitions contained in the range. Null means unmeasured, not zero.
-Metadata establishes structure and lexical coverage, not semantic relevance.
-Non-citation prose retains its text with accepted anchors rewritten to canonical labels.
-
-Guaranteed grammars: Python, JS/JSX, TS/TSX, C/C++, C#, Java, Go, Rust, Ruby,
-PHP, Bash, Lua, Kotlin and Swift. Dependencies are pinned to the verified bundled
-pack 0.13.0 and Tree-sitter 0.25.2, avoiding on-demand grammar downloads.
-
-Validation: major-language symbol fixtures, HTTPX's six redirect functions
-(140 lines vs 531; 15 contained definitions), repair feedback, budget boundaries,
-safety exclusions and all core termination paths. The opt-in benchmark records
-hit rate, recall, tightness, bytes, latency and turns; CI remains endpoint-free.
+Validation includes bundled major-language grammars, the pinned HTTPX redirect
+regression (six definitions, 140 lines versus 531; 15 definitions in the old
+range), repair/termination paths, overlapping anchors, Unicode/CRLF boundaries,
+parser outcomes, safety, configuration, CLI/MCP behavior, and independent golden
+ranges. Model quality remains an opt-in trend using the shared benchmark runner;
+standard tests require no external endpoint.

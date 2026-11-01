@@ -1,8 +1,64 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from enum import StrEnum
+from io import StringIO
 from pathlib import Path
 from typing import Any, Literal
+
+MAX_CITATIONS = 12
+MAX_ANCHORS = 16
+ToolName = Literal["read_file", "repo_glob", "repo_grep"]
+
+
+def source_lines(text: str) -> list[str]:
+    """Filesystem/parser lines: only LF is a boundary, including CRLF."""
+    return list(StringIO(text, newline="\n"))
+
+
+class Diagnostic(StrEnum):
+    GLOB_LIMIT = "glob scan budget exhausted"
+    GREP_LIMIT = "grep scan budget exhausted"
+    READ_LIMIT = "read scan budget exhausted"
+    GREP_TIMEOUT = "grep match timed out"
+    UNREADABLE_ENTRY = "search skipped an unreadable entry"
+    UNREADABLE_DIRECTORY = "search skipped an unreadable directory"
+    UNREADABLE_FILE = "search skipped an unreadable file"
+    OVERSIZED_LINE = "search skipped an oversized line"
+    PARSER_INPUT_LIMIT = "parser input limit reached"
+    PARSER_TIMEOUT = "parser deadline reached"
+    TOKEN_LIMIT = "endpoint completion token limit reached"
+    CITATION_LIMIT = "citation verification limit reached"
+    PRECISION_LIMIT = "citation precision limits reached"
+    INVALID_CITATION = "invalid citation rejected"
+    LOG_FAILED = "trajectory log could not be written"
+    SYMBOL_MISSING = "query symbol not found in verified evidence"
+    DOCS_ONLY = "implementation source not verified; returning documentation evidence"
+    TRAILING_CALLS = "ignored trailing tool calls after valid citations"
+    NO_FINAL_CITATIONS = "final answer did not include valid citations"
+    PARTIAL_NO_CITATIONS = "partial answer did not include valid citations"
+    NARROW_EVIDENCE = "sufficient narrow evidence stopped broad read"
+    REPEATED_CALL = "repeated tool call stopped exploration"
+    PARTIAL_TURN_LIMIT = "max turns exceeded after partial answer"
+    TURN_LIMIT = "max turns exceeded without final answer"
+    RAW_UNREADABLE = "raw location could not be read"
+    RAW_TRUNCATED = "raw location truncated"
+
+    @property
+    def scan_limit(self) -> bool:
+        return self in {
+            self.GLOB_LIMIT,
+            self.GREP_LIMIT,
+            self.READ_LIMIT,
+            self.GREP_TIMEOUT,
+            self.PARSER_INPUT_LIMIT,
+            self.PARSER_TIMEOUT,
+        }
+
+    @property
+    def incomplete(self) -> bool:
+        return self.scan_limit or self in {self.CITATION_LIMIT, self.PRECISION_LIMIT}
+
 
 ErrorCode = Literal[
     "CONFIG_MISSING_ENDPOINT",
@@ -56,10 +112,17 @@ class CitationPrecision:
 @dataclass(frozen=True, slots=True)
 class Citation:
     path: str
-    start_line: int | None = None
-    end_line: int | None = None
+    start_line: int
+    end_line: int
 
     precision: CitationPrecision | None = field(default=None, compare=False)
+
+    def contains(self, other: Citation) -> bool:
+        return (
+            self.path == other.path
+            and self.start_line <= other.start_line
+            and self.end_line >= other.end_line
+        )
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -70,9 +133,7 @@ class Citation:
         }
 
     def label(self) -> str:
-        if self.start_line is None:
-            return self.path
-        if self.end_line is None or self.end_line == self.start_line:
+        if self.end_line == self.start_line:
             return f"{self.path}:{self.start_line}"
         return f"{self.path}:{self.start_line}-{self.end_line}"
 
@@ -112,7 +173,7 @@ class SearchHit:
 @dataclass(slots=True)
 class ToolCall:
     id: str
-    name: Literal["read_file", "repo_glob", "repo_grep"]
+    name: ToolName
     arguments: dict[str, object]
 
 
@@ -127,7 +188,14 @@ class ToolObservation:
     hits: list[SearchHit] = field(default_factory=list)
     truncated: bool = False
     error: ExplorerError | None = None
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[Diagnostic] = field(default_factory=list)
+
+    @property
+    def span(self) -> Citation | None:
+        if self.path is None or self.line_range is None:
+            return None
+        start, _, end = self.line_range.partition("-")
+        return Citation(self.path, int(start), int(end or start))
 
     def to_dict(self, *, include_content: bool = True) -> dict[str, object]:
         data: dict[str, object] = {
@@ -149,7 +217,7 @@ class ToolObservation:
         if self.hits:
             data["hits"] = [hit.to_dict() for hit in self.hits]
         if self.warnings:
-            data["warnings"] = self.warnings
+            data["warnings"] = [str(w) for w in self.warnings]
         if self.error is not None:
             data["error"] = self.error.to_dict()
         return data
@@ -167,7 +235,6 @@ class ExploreRequest:
     repo_root: Path
     max_turns: int = 6
     citation: bool = True
-    format: Literal["text", "json"] = "text"
 
     def validate(self) -> None:
         if not self.query.strip():
@@ -191,7 +258,6 @@ class ExploreRequest:
             "repo_root": str(self.repo_root),
             "max_turns": self.max_turns,
             "citation": self.citation,
-            "format": self.format,
         }
 
 
@@ -204,7 +270,7 @@ class ExploreResult:
     turns_used: int
     raw_locations: list[RawLocation] = field(default_factory=list)
     truncated: bool = False
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[Diagnostic] = field(default_factory=list)
 
     def to_dict(self, *, include_raw_location_text: bool = True) -> dict[str, object]:
         return {
@@ -218,7 +284,7 @@ class ExploreResult:
             ],
             "turns_used": self.turns_used,
             "truncated": self.truncated,
-            "warnings": self.warnings,
+            "warnings": [str(w) for w in self.warnings],
         }
 
 

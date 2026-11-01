@@ -2,7 +2,6 @@ explorer:
   max_turns: 6
   max_citation_lines: 120
   max_total_citation_lines: 240
-  citation: true
   ignore:
     - ".git"
     - ".venv"

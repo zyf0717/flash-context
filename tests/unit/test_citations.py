@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from flash_context.agent import _merge_adjacent_citations, extract_citations
+from flash_context.agent import _merge_adjacent_citations
+from flash_context.queries import extract_citations
 from flash_context.types import Citation
 
 
@@ -34,8 +35,7 @@ def test_extract_lines_of_source_citation() -> None:
 
 def test_extract_markdown_file_lines_citation() -> None:
     citations = extract_citations(
-        "- **File**: `src/flash_context/types.py`\n"
-        "- **Lines**: 125\u2013140"
+        "- **File**: `src/flash_context/types.py`\n- **Lines**: 125\u2013140"
     )
 
     assert citations[0].path == "src/flash_context/types.py"

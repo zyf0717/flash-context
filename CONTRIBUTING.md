@@ -31,26 +31,19 @@ uv run --locked mypy
 uv run --locked pytest -m "not e2e"
 ```
 
-`.github/workflows/ci.yml` runs on branch pushes and pull requests to `main`.
+`.github/workflows/ci.yml` runs on `main` pushes and pull requests to `main`.
 It checks Python 3.13 and 3.14 and verifies clean wheel and source installs.
 The tag release workflow reuses these checks before publishing.
 [Releasing](docs/releasing.md) covers package checks and publication.
 
 ## Endpoint-backed tests
 
-These optional tests use this repository as the target and require a running
-model endpoint. From the source checkout, configure its URL and model, then run:
+Live quality probes and the benchmark share pinned fixtures and independently
+reviewed expected ranges. See [benchmark instructions](benchmarks/README.md) for
+repetitions, timing, metrics, and comparing installed releases. To run the probes:
 
 ```bash
-export FLASH_CONTEXT_BASE_URL=http://localhost:1234/v1
-export FLASH_CONTEXT_MODEL=your-model
-FLASH_CONTEXT_RUN_E2E=1 uv run --locked pytest tests/e2e
-```
-
-To print per-prompt timing:
-
-```bash
-FLASH_CONTEXT_RUN_E2E=1 uv run --locked pytest tests/e2e/test_current_repo_multi_prompt_timing.py -s
+FLASH_CONTEXT_RUN_E2E=1 uv run --locked pytest tests/e2e -s
 ```
 
 ## Implementation guidelines
@@ -62,16 +55,16 @@ FLASH_CONTEXT_RUN_E2E=1 uv run --locked pytest tests/e2e/test_current_repo_multi
   traversal, symlink, denylist, and resource-limit protections.
 - Add proportionate regression tests for changed behavior. Standard tests must
   mock external endpoints and must not depend on credentials or live services.
-- Update the relevant specs, contracts, README, and user-facing documentation
-  when changing public behavior.
+- Update the canonical contract for changed behavior and affected examples; avoid
+  copying shared policy into adapter or configuration docs.
 - Refresh `uv.lock` with `uv lock` when changing dependencies.
 - Add user-visible changes and migration instructions to `CHANGELOG.md` under
   `[Unreleased]`. Version preparation promotes those notes to a dated release
   entry; see [Releasing](docs/releasing.md).
 
 Read [AGENTS.md](AGENTS.md) for repository-wide guidance,
-[specs](specs/) for behavior and contracts, and
-[implementation order](docs/implementation-order.md) for scope and sequencing.
+[shared contract](docs/contracts.md) for current behavior, and
+[spec history](specs/README.md) for completed work and active proposals.
 
 ## Issues and pull requests
 

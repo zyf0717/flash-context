@@ -1,16 +1,27 @@
 # Citation quality trends
 
-Run `uv run python scripts/citation_benchmark.py > /tmp/citation-quality.jsonl`
-with an explicitly configured model endpoint. This is opt-in and never required
-by CI. It runs each pinned case three times. Compare releases using the same
-model, settings, fixtures, and repetition count. Record package and parser
-versions alongside the results (`uv pip freeze`). Source fixture hashes are
-checked before execution. HTTPX 0.28.1's `_client.py` is copied verbatim from the
-published wheel; its BSD license accompanies the fixture.
+Configure an endpoint, then run:
 
-Hit rate means all expected definition regions were touched. Symbol recall is
-the fraction touched; tightness is expected/cited unique line intersection over
-cited unique lines (null for empty answers). Report these together: tightness
-alone can reward incomplete answers. Bytes measure UTF-8 snippets and serialized
-results separately. Timing includes the model; unit tests measure deterministic
-structure without calling an endpoint.
+```bash
+uv run python scripts/citation_benchmark.py --repetitions 3 > /tmp/quality.jsonl
+FLASH_CONTEXT_RUN_E2E=1 uv run pytest tests/e2e -s
+```
+
+Both entrypoints use `citations.json`: pinned source hashes and independently
+reviewed expected line ranges. Do not regenerate truth through the production
+resolver. The HTTPX 0.28.1 source and its BSD license are included in fixtures.
+
+Each JSONL row records package/parser versions, effective noncredential settings,
+fixture hash, turns, time, cited lines, UTF-8 snippet bytes, result bytes, and
+incomplete-result metadata. Hit means every expected region was touched;
+`region_recall` is the fraction touched. Tightness is expected/cited unique-line
+intersection divided by cited lines (null for empty output). These are structural
+proxies; evaluate recall and tightness together. They do not measure semantics.
+
+For release comparisons, keep this script and fixture manifest fixed and run the
+script with each release's installed Python environment, from a directory outside
+the source checkout. For example, `/tmp/old-env/bin/python /path/to/flash-context/scripts/citation_benchmark.py`.
+The runner imports only shared exploration/configuration interfaces and does not
+use the v0.4.0 parser to calculate expected results. Keep model, settings, and
+repetition count identical. Standard CI uses mocked endpoints; live trends are
+opt-in and depend on the configured model.

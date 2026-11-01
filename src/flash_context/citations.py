@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import re
 import warnings
-from dataclasses import dataclass
-from io import StringIO
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 from tree_sitter import Node, Parser
 from tree_sitter_language_pack import SupportedLanguage, get_language
@@ -15,7 +14,16 @@ from tree_sitter_language_pack import SupportedLanguage, get_language
 from flash_context.config import Settings
 from flash_context.tools import read_file
 from flash_context.tools.safety import ScanBudget
-from flash_context.types import Citation, CitationPrecision, ExplorerError
+from flash_context.types import (
+    MAX_ANCHORS,
+    MAX_CITATIONS,
+    Citation,
+    CitationPrecision,
+    Diagnostic,
+    ExplorerError,
+    RawLocation,
+    source_lines,
+)
 
 LANGUAGES = {
     "py": "python",
@@ -90,6 +98,31 @@ class Region:
 class Source:
     lines: list[str]
     regions: list[Region] | None
+    status: Literal["parsed", "unsupported", "invalid", "limited", "timeout"]
+    warnings: list[Diagnostic] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class Resolution:
+    citations: list[Citation] = field(default_factory=list)
+    anchors: dict[str, Citation] = field(default_factory=dict)
+    feedback: list[str] = field(default_factory=list)
+    warnings: list[Diagnostic] = field(default_factory=list)
+
+    def render(self, answer: str) -> str:
+        return (
+            ANCHOR.sub(
+                lambda m: self.anchors[m[0]].label() if m[0] in self.anchors else "",
+                answer,
+            )
+            .replace("<final_answer>", "")
+            .replace("</final_answer>", "")
+            .strip()
+        )
+
+
+class AnchorRejected(ValueError):
+    """An anchor requires correction by the model."""
 
 
 def _name(node: Node) -> str | None:
@@ -128,22 +161,20 @@ class CitationResolver:
         self.root = root
         self.settings = settings
         self.token = token
-        self.sources: dict[str, Source | None] = {}
+        self.sources: dict[str, Source] = {}
         self.bytes_read = 0
-        self.feedback: list[str] = []
-        self.warnings: list[str] = []
-        self.repaired = False
 
-    def source(self, path: str) -> Source | None:
+    def source(self, path: str) -> Source:
         if path in self.sources:
             return self.sources[path]
-        self.sources[path] = None
         cap = min(
             self.settings.max_parse_bytes,
             self.settings.max_scan_bytes - self.bytes_read,
         )
         if cap <= 0:
-            return None
+            source = Source([], None, "limited", [Diagnostic.READ_LIMIT])
+            self.sources[path] = source
+            return source
         try:
             observation = read_file(
                 repo_root=self.root,
@@ -154,16 +185,23 @@ class CitationResolver:
             )
         except ExplorerError as exc:
             if exc.code == "TOOL_LIMIT_EXCEEDED":
-                self.warnings.append("read scan budget exhausted")
-            return None
-        self.warnings.extend(observation.warnings)
+                source = Source([], None, "limited", [Diagnostic.READ_LIMIT])
+                self.sources[path] = source
+                return source
+            raise AnchorRejected(
+                "Anchor could not be read within repository safety and parser limits."
+            ) from exc
         text = observation.content or ""
         self.bytes_read += len(text.encode("utf-8"))
-        lines = list(StringIO(text, newline="\n"))
+        lines = source_lines(text)
         if observation.truncated and lines and not lines[-1].endswith("\n"):
             lines.pop()
         language = LANGUAGES.get(Path(path).suffix.lstrip(".").lower())
         regions: list[Region] | None = None
+        status: Literal["parsed", "unsupported", "invalid", "limited", "timeout"] = (
+            "limited" if observation.truncated else "unsupported"
+        )
+        diagnostics = list(observation.warnings)
         if language and not observation.truncated:
             grammar = get_language(cast(SupportedLanguage, language))
             data = text.encode("utf-8")
@@ -180,7 +218,8 @@ class CitationResolver:
                         ),
                     )
                 tree = parser.parse(data)
-                if not tree.root_node.has_error:
+                status = "invalid" if tree.root_node.has_error else "parsed"
+                if status == "parsed":
                     regions = []
                     stack: list[tuple[Node, tuple[str, ...]]] = [(tree.root_node, ())]
                     while stack:
@@ -243,19 +282,19 @@ class CitationResolver:
                         )
             except (ValueError, ExplorerError):
                 regions = None
-        source = Source(lines, regions)
+                status = "timeout"
+        if status == "limited":
+            diagnostics.append(Diagnostic.PARSER_INPUT_LIMIT)
+        elif status == "timeout":
+            diagnostics.append(Diagnostic.PARSER_TIMEOUT)
+        source = Source(lines, regions, status, diagnostics)
         self.sources[path] = source
         return source
 
-    def resolve(
+    def _resolve(
         self, path: str, *, symbol: str | None = None, line: int | None = None
-    ) -> Citation | None:
+    ) -> Citation:
         source = self.source(path)
-        if source is None:
-            self.feedback.append(
-                "Anchor could not be read within repository safety and parser limits."
-            )
-            return None
         region = None
         if symbol:
             matches = [
@@ -267,11 +306,10 @@ class CitationResolver:
             if len(matches) == 1:
                 region = matches[0]
             else:
-                self.feedback.append(
+                raise AnchorRejected(
                     "Symbol missing, ambiguous, or unavailable: qualify its name or "
                     "choose a line anchor."
                 )
-                return None
         elif line is not None and 1 <= line <= len(source.lines):
             containing = [r for r in source.regions or [] if r.start <= line <= r.end]
             definitions = [r for r in containing if r.kind == "definition"]
@@ -296,18 +334,16 @@ class CitationResolver:
                     "line_window",
                 )
         if region is None:
-            self.feedback.append(
+            raise AnchorRejected(
                 "No bounded syntax region contains the anchor; choose another line."
             )
-            return None
         count = region.end - region.start + 1
         if count > self.settings.max_citation_lines:
-            self.feedback.append(
+            raise AnchorRejected(
                 f"Definition spans {count} lines, max "
                 f"{self.settings.max_citation_lines}; "
                 "choose a line inside a smaller syntax region."
             )
-            return None
         text = "".join(source.lines[region.start - 1 : region.end])
         present = (
             bool(re.search(rf"\b{re.escape(self.token)}\b", text))
@@ -315,10 +351,9 @@ class CitationResolver:
             else None
         )
         if present is False:
-            self.feedback.append(
+            raise AnchorRejected(
                 "Cited region must contain the exact whole query token."
             )
-            return None
         definitions_spanned = (
             sum(
                 r.kind == "definition"
@@ -338,79 +373,67 @@ class CitationResolver:
             ),
         )
 
-    def parse(self, content: str) -> list[Citation]:
-        self.feedback.clear()
-        citations = []
+    def parse(self, content: str) -> Resolution:
+        result = Resolution()
         for index, match in enumerate(ANCHOR.finditer(content)):
-            if index >= 16:
-                self.feedback.append("At most 16 anchor candidates can be verified.")
+            try:
+                if index >= MAX_ANCHORS:
+                    raise AnchorRejected(
+                        f"At most {MAX_ANCHORS} anchor candidates can be verified."
+                    )
+                if match["range"]:
+                    raise AnchorRejected(
+                        "Model ranges are unsupported; name symbols or individual "
+                        "line anchors."
+                    )
+                citation = self._resolve(
+                    match["path"],
+                    symbol=match["symbol"],
+                    line=int(match["line"]) if match["line"] else None,
+                )
+                if citation not in result.citations:
+                    coverage = {
+                        (c.path, n)
+                        for c in [*result.citations, citation]
+                        for n in range(c.start_line, c.end_line + 1)
+                    }
+                    if (
+                        len(result.citations) >= MAX_CITATIONS
+                        or len(coverage) > self.settings.max_total_citation_lines
+                    ):
+                        raise AnchorRejected(
+                            f"Answer exceeds {MAX_CITATIONS} citations or "
+                            f"{self.settings.max_total_citation_lines} total lines; "
+                            "select fewer anchors."
+                        )
+                    result.citations.append(citation)
+                result.anchors[match[0]] = citation
+            except AnchorRejected as exc:
+                result.feedback.append(str(exc))
+            if index >= MAX_ANCHORS:
                 break
-            if match["range"]:
-                self.feedback.append(
-                    "Model ranges are unsupported; name symbols or individual line "
-                    "anchors."
-                )
-                continue
-            citation = self.resolve(
-                match["path"],
-                symbol=match["symbol"],
-                line=int(match["line"]) if match["line"] else None,
+        paths = dict.fromkeys(m["path"] for m in ANCHOR.finditer(content))
+        result.warnings = list(
+            dict.fromkeys(
+                warning
+                for path in paths
+                if path in self.sources
+                for warning in self.sources[path].warnings
             )
-            if citation is not None:
-                citations.append(citation)
-        return self.limit(citations)
+        )
+        return result
 
-    def limit(self, citations: list[Citation]) -> list[Citation]:
-        accepted: list[Citation] = []
-        coverage: set[tuple[str, int]] = set()
-        for citation in citations:
-            if citation in accepted:
-                continue
-            assert citation.start_line is not None and citation.end_line is not None
-            lines = {
-                (citation.path, n)
-                for n in range(citation.start_line, citation.end_line + 1)
-            }
-            if (
-                len(accepted) == 12
-                or len(coverage | lines) > self.settings.max_total_citation_lines
-            ):
-                self.feedback.append(
-                    f"Answer exceeds 12 citations or "
-                    f"{self.settings.max_total_citation_lines} total lines; "
-                    "select fewer anchors."
-                )
-                continue
-            coverage |= lines
-            accepted.append(citation)
-        return accepted
-
-
-def render_answer(answer: str, citations: list[Citation]) -> str:
-    """Replace accepted anchors in prose without exposing unchecked references."""
-
-    def render(match: re.Match[str]) -> str:
-        if match["range"]:
-            return ""
-        for citation in citations:
-            if citation.path != match["path"]:
-                continue
-            symbol = citation.precision.symbol if citation.precision else None
-            if (
-                match["symbol"]
-                and symbol
-                and match["symbol"] in {symbol, symbol.split(".")[-1]}
-            ):
-                return citation.label()
-            if match["line"] and (citation.start_line or 0) <= int(match["line"]) <= (
-                citation.end_line or 0
-            ):
-                return citation.label()
-        return ""
-
-    return (
-        ANCHOR.sub(render, answer)
-        .replace("<final_answer>", "")
-        .replace("</final_answer>", "")
-        .strip()
-    )
+    def snippet(self, citation: Citation) -> RawLocation:
+        """Return the same source snapshot that supplied the citation metadata."""
+        source = self.sources[citation.path]
+        text = "".join(source.lines[citation.start_line - 1 : citation.end_line])
+        data = text.encode("utf-8")
+        truncated = len(data) > self.settings.max_read_bytes
+        text = data[: self.settings.max_read_bytes].decode("utf-8", errors="ignore")
+        return RawLocation(
+            citation.path,
+            citation.start_line,
+            citation.start_line + max(1, len(source_lines(text))) - 1,
+            text,
+            truncated,
+        )
