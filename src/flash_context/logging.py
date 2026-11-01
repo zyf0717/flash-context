@@ -45,16 +45,18 @@ class TrajectoryRecorder:
         tools: list[dict[str, Any]],
         *,
         selecting: bool,
+        selection_reason: str | None = None,
     ) -> None:
         if self._traj_dir is not None:
-            self._turns.append(
-                {
-                    "turn": turn,
-                    "phase": "selection" if selecting else "discovery",
-                    "message_roles": [m["role"] for m in messages],
-                    "tool_count": len(tools),
-                }
-            )
+            entry: dict[str, object] = {
+                "turn": turn,
+                "phase": "selection" if selecting else "discovery",
+                "message_roles": [m["role"] for m in messages],
+                "tool_count": len(tools),
+            }
+            if selecting and selection_reason:
+                entry["selection_reason"] = selection_reason
+            self._turns.append(entry)
 
     def record_model_turn(self, turn: int, message: dict[str, object]) -> None:
         if self._traj_dir is not None:

@@ -1,7 +1,7 @@
 # Shared exploration contract
 
 CLI and MCP delegate to `explore(ExploreRequest, Settings)`. A request contains
-`query`, `repo_root`, `max_turns` (6), and `citation` (true). The query must be
+`query`, `repo_root`, `max_turns` (12), and `citation` (true). The query must be
 nonblank, turns positive, and root an existing directory. Output formatting is
 an adapter concern. Configuration ownership and precedence are defined in
 [configuration](configuration.md).
@@ -91,6 +91,11 @@ With at least two turns, one turn is reserved for final evidence selection;
 with grep/glob tools, then enable reads. Stalled discovery or prose without
 usable citations can enter selection early. Selection receives the query and
 bounded, deduplicated observations in a fresh conversation without tools.
+After three consecutive successful reads that add no new visible source lines,
+discovery also moves to selection. New source lines or a fresh search reset this
+count; mixed tool batches complete before the decision. Selection consolidates
+overlapping read excerpts by file and line. Trajectory metadata records why
+selection started without logging source text.
 Successful early answers and explicit `NO_CITATIONS_FOUND` remain terminal.
 
 Valid selected evidence ends exploration before trailing tool calls. Calls
@@ -106,7 +111,8 @@ lexical; explicit documentation and exact lookups retain their behavior.
 
 `NO_CITATIONS_FOUND` ends exploration without promoting previous reads.
 Token-limited completions return usable evidence with truncation and a warning,
-or `ENDPOINT_BAD_RESPONSE` without evidence. Empty messages without calls are
+or enter selection when prior reads exist and a turn remains. Without either,
+they return `ENDPOINT_BAD_RESPONSE`. Empty messages without calls are
 endpoint errors. Turn exhaustion and incomplete evidence remain explicit warnings.
 Internal diagnostic identities determine truncation and CLI exits; messages are
 rendered for consumers. Warnings do not carry repository contents or raw errors.

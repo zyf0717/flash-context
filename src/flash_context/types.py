@@ -233,7 +233,7 @@ class ToolObservation:
 class ExploreRequest:
     query: str
     repo_root: Path
-    max_turns: int = 6
+    max_turns: int = 12
     citation: bool = True
 
     def validate(self) -> None:

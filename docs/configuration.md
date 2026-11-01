@@ -46,7 +46,7 @@ The [example YAML](../config.yaml.example) and
 | `FLASH_CONTEXT_BASE_URL` | unset | OpenAI-compatible endpoint base URL |
 | `FLASH_CONTEXT_MODEL` | unset | Endpoint model identifier |
 | `FLASH_CONTEXT_API_KEY` | unset | Optional endpoint credential |
-| `FLASH_CONTEXT_MAX_TURNS` | `6` | Maximum exploration turns |
+| `FLASH_CONTEXT_MAX_TURNS` | `12` | Maximum exploration turns |
 | `FLASH_CONTEXT_MAX_READ_BYTES` | `12000` | File read byte cap |
 | `FLASH_CONTEXT_MAX_GREP_RESULTS` | `50` | Grep result cap |
 | `FLASH_CONTEXT_TRAJ_DIR` | unset | Optional trajectory log directory |

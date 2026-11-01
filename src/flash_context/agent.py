@@ -49,6 +49,8 @@ class _DefinitionScan:
 @dataclass(slots=True)
 class EvidenceState:
     reads: list[ToolObservation] = field(default_factory=list)
+    covered_lines: dict[str, set[int]] = field(default_factory=dict)
+    redundant_reads: int = 0
     citations: list[Citation] = field(default_factory=list)
     observations: dict[str, ToolObservation] = field(default_factory=dict)
     symbol: str | None = None
@@ -122,13 +124,18 @@ def explore(
     answer = ""
     repaired = False
     selecting = False
+    selection_reason: str | None = None
     owns_client = client is None
     chat_client = client or ChatClient(settings)
     try:
         for turn in range(1, effective_max_turns + 1):
-            selecting = selecting or (
-                effective_max_turns >= 2 and turn == effective_max_turns
-            )
+            if (
+                not selecting
+                and effective_max_turns >= 2
+                and turn == effective_max_turns
+            ):
+                selecting = True
+                selection_reason = "turn_budget"
             turn_messages = (
                 _selection_messages(request, messages) if selecting else messages
             )
@@ -143,7 +150,11 @@ def explore(
                     t for t in turn_tools if t["function"]["name"] != "read_file"
                 ]
             recorder.record_request(
-                turn, turn_messages, turn_tools, selecting=selecting
+                turn,
+                turn_messages,
+                turn_tools,
+                selecting=selecting,
+                selection_reason=selection_reason,
             )
             response = chat_client.chat_completion(
                 messages=turn_messages, tools=turn_tools
@@ -172,6 +183,11 @@ def explore(
                 warnings.append(Diagnostic.TOKEN_LIMIT)
                 truncated = True
                 if not _best_current_citations(evidence):
+                    if evidence.reads and not selecting and turn < effective_max_turns:
+                        selecting = True
+                        selection_reason = "token_limit"
+                        answer = ""
+                        continue
                     raise ExplorerError(
                         "ENDPOINT_BAD_RESPONSE",
                         "Completion token limit reached without evidence",
@@ -233,6 +249,7 @@ def explore(
                     continue
                 if turn < effective_max_turns:
                     selecting = True
+                    selection_reason = "no_calls"
                     continue
                 if request.citation:
                     warnings.append(Diagnostic.NO_FINAL_CITATIONS)
@@ -251,6 +268,7 @@ def explore(
                 warnings.append(Diagnostic.REPEATED_CALL)
                 if turn < effective_max_turns:
                     selecting = True
+                    selection_reason = "repeated_call"
                     continue
                 break
             messages.append(_assistant_tool_message(message))
@@ -258,6 +276,8 @@ def explore(
                 list(fresh.values()), repo_root=repo_root, settings=settings
             )
             evidence.observations.update(zip(fresh, observations, strict=True))
+            new_coverage = False
+            redundant_reads = 0
             for call in calls:
                 observation = replace(
                     evidence.observations[_tool_call_fingerprint(call)],
@@ -277,6 +297,16 @@ def explore(
                     read = replace(observation, tool_call_id=None)
                     if read not in evidence.reads:
                         evidence.reads.append(read)
+                    if fresh.get(_tool_call_fingerprint(call)) is call:
+                        lines = _visible_lines(payload)
+                        covered = evidence.covered_lines.setdefault(
+                            observation.path, set()
+                        )
+                        if lines.keys() - covered:
+                            new_coverage = True
+                        else:
+                            redundant_reads += 1
+                        covered.update(lines)
                 recorder.record_observation(turn, call.name, observation)
                 messages.append(
                     {
@@ -289,6 +319,16 @@ def explore(
             messages.extend(feedback)
             if needs_source:
                 messages.append(_source_feedback())
+            if new_coverage or any(
+                c.name != "read_file" or not evidence.observations[key].ok
+                for key, c in fresh.items()
+            ):
+                evidence.redundant_reads = 0
+            else:
+                evidence.redundant_reads += redundant_reads
+            if evidence.redundant_reads >= 3 and turn < effective_max_turns:
+                selecting = True
+                selection_reason = "stalled_reads"
         else:
             warnings.append(
                 Diagnostic.PARTIAL_TURN_LIMIT if answer else Diagnostic.TURN_LIMIT
@@ -888,8 +928,28 @@ def _int_argument(arguments: dict[str, object], key: str) -> int | None:
 def _selection_messages(
     request: ExploreRequest, messages: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    observations = dict.fromkeys(
-        str(m["content"]) for m in messages if m["role"] == "tool"
+    observations: list[str] = []
+    read_lines: dict[str, dict[int, str]] = {}
+    for message in messages:
+        if message["role"] != "tool":
+            continue
+        payload = json.loads(str(message["content"]))
+        path = payload.get("path")
+        if (
+            message.get("name") == "read_file"
+            and payload.get("ok")
+            and isinstance(path, str)
+        ):
+            lines = _visible_lines(payload)
+            if lines:
+                read_lines.setdefault(path, {}).update(lines)
+                continue
+        payload.pop("tool_call_id", None)
+        encoded = json.dumps(payload, sort_keys=True)
+        if encoded not in observations:
+            observations.append(encoded)
+    observations.extend(
+        path + ":\n" + "\n".join(lines.values()) for path, lines in read_lines.items()
     )
     return [
         {
@@ -923,3 +983,17 @@ def _selection_messages(
             + "\n\n".join(observations),
         },
     ]
+
+
+def _visible_lines(payload: dict[str, object]) -> dict[int, str]:
+    content = payload.get("content")
+    if not isinstance(content, str):
+        return {}
+    lines: dict[int, str] = {}
+    for line in source_lines(content):
+        if payload.get("truncated") and not line.endswith("\n"):
+            continue
+        match = re.match(r"^(\d+): ", line)
+        if match:
+            lines[int(match[1])] = line.rstrip("\n")
+    return lines

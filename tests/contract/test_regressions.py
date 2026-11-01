@@ -12,7 +12,7 @@ from flash_context.citations import CitationResolver
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
 from flash_context.types import Diagnostic, ExploreRequest, ExplorerError
-from tests.helpers import _message_response, _tool_response
+from tests.helpers import _message_response, _multi_tool_response, _tool_response
 
 
 @pytest.mark.parametrize("status", ["missing", "ambiguous", "incomplete"])
@@ -79,6 +79,146 @@ def test_selection_is_bounded_and_tool_free(tmp_path: Path, ending: str) -> None
     assert bool(result.citations) is (ending != "ignored_tool")
     if ending == "ignored_tool":
         assert result.truncated
+
+
+def test_shifted_reads_select_after_coverage_stalls(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text("def answer():\n" + "    pass\n" * 8)
+    calls = [
+        _tool_response("search", "repo_glob", {"pattern": "*.py"}),
+        *(
+            _tool_response(
+                f"read_{number}",
+                "read_file",
+                {"path": "a.py", "start_line": start, "end_line": end},
+            )
+            for number, (start, end) in enumerate(
+                [(1, 4), (4, 7), (3, 5), (5, 7), (2, 6)], start=1
+            )
+        ),
+        _message_response("a.py:1"),
+    ]
+    seen: list[dict[str, Any]] = []
+    settings = Settings(
+        base_url="http://test/v1",
+        model="mock",
+        max_turns=10,
+        traj_dir=tmp_path.parent / f"{tmp_path.name}-trajectory",
+    )
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json=calls[len(seen) - 1])
+
+    client = ChatClient(settings, transport=httpx.MockTransport(handle))
+    try:
+        result = explore(
+            ExploreRequest("How does the answer work?", tmp_path, max_turns=10),
+            settings,
+            client=client,
+        )
+    finally:
+        client.close()
+    assert result.turns_used == 7
+    assert [c.label() for c in result.citations] == ["a.py:1-9"]
+    assert all("tools" in request for request in seen[:-1])
+    assert "tools" not in seen[-1]
+    selection = seen[-1]["messages"][1]["content"]
+    assert selection.count("4:     pass") == 1
+    assert "tool_call_id" not in selection
+    traj_dir = tmp_path.parent / f"{tmp_path.name}-trajectory"
+    log = json.loads(next(traj_dir.glob("*.json")).read_text())
+    assert (
+        next(t for t in log["turns"] if t.get("phase") == "selection")[
+            "selection_reason"
+        ]
+        == "stalled_reads"
+    )
+
+
+def test_fresh_sibling_prevents_premature_selection(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text("def answer():\n" + "    pass\n" * 8)
+    replies = [
+        _tool_response("search", "repo_glob", {"pattern": "*.py"}),
+        _tool_response(
+            "first", "read_file", {"path": "a.py", "start_line": 1, "end_line": 4}
+        ),
+        _multi_tool_response(
+            [
+                (
+                    "old_1",
+                    "read_file",
+                    {"path": "a.py", "start_line": 2, "end_line": 3},
+                ),
+                (
+                    "old_2",
+                    "read_file",
+                    {"path": "a.py", "start_line": 1, "end_line": 2},
+                ),
+                ("new", "read_file", {"path": "a.py", "start_line": 4, "end_line": 6}),
+            ]
+        ),
+        _tool_response(
+            "more", "read_file", {"path": "a.py", "start_line": 6, "end_line": 8}
+        ),
+        _message_response("a.py:1"),
+    ]
+    seen: list[dict[str, Any]] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json=replies[len(seen) - 1])
+
+    settings = Settings(base_url="http://test/v1", model="mock", max_turns=10)
+    client = ChatClient(settings, transport=httpx.MockTransport(handle))
+    try:
+        result = explore(
+            ExploreRequest("How does the answer work?", tmp_path, max_turns=10),
+            settings,
+            client=client,
+        )
+    finally:
+        client.close()
+    assert result.turns_used == 5
+    assert "tools" in seen[3]
+    assert [c.label() for c in result.citations] == ["a.py:1-9"]
+
+
+def test_token_limited_completion_selects_prior_read(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text("def answer():\n    return 1\n")
+    replies = [
+        _tool_response("search", "repo_glob", {"pattern": "*.py"}),
+        _tool_response("read", "read_file", {"path": "a.py"}),
+        {
+            "choices": [
+                {
+                    "message": {"role": "assistant", "content": "unfinished"},
+                    "finish_reason": "length",
+                }
+            ]
+        },
+        _message_response("a.py:1"),
+    ]
+    seen: list[dict[str, Any]] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json=replies[len(seen) - 1])
+
+    settings = Settings(base_url="http://test/v1", model="mock", max_turns=6)
+    client = ChatClient(settings, transport=httpx.MockTransport(handle))
+    try:
+        result = explore(
+            ExploreRequest("How does the answer work?", tmp_path),
+            settings,
+            client=client,
+        )
+    finally:
+        client.close()
+    assert result.turns_used == 4
+    assert [c.label() for c in result.citations] == ["a.py:1-2"]
+    assert Diagnostic.TOKEN_LIMIT in result.warnings
+    assert result.truncated
+    assert "tools" not in seen[-1]
 
 
 def test_endpoint_error_metadata_remains_private(tmp_path: Path) -> None:
