@@ -21,7 +21,9 @@ relevance or minimal ranges. Citation precision depends on the explorer model.
 Optional metadata-only trajectory logs must stay outside the inspected repository.
 
 Inspired by [FastContext](https://arxiv.org/abs/2606.14066), a now-withdrawn paper
-on delegating repository exploration to a dedicated model.
+on separating repository exploration from task solving, using specialized models
+to return focused file-line evidence while reducing the coding agent's context
+and token overhead.
 
 ## Quickstart
 
