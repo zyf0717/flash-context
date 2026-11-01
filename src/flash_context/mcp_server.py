@@ -7,21 +7,21 @@ from pathlib import Path
 from typing import Any
 
 from flash_context import __version__
-from flash_context.agent import explore
+from flash_context.agent import search
 from flash_context.config import Settings, SettingsOverrides, load_settings
-from flash_context.types import ExploreRequest, ExplorerError, ExploreResult
+from flash_context.types import SearchError, SearchRequest, SearchResult
 
-CoreFn = Callable[[ExploreRequest, Settings], ExploreResult]
+CoreFn = Callable[[SearchRequest, Settings], SearchResult]
 
 
-def explore_repository_handler(
+def search_repository_handler(
     *,
     query: str,
     repo_root: str | None = None,
     max_turns: int | None = None,
     citation: bool | None = None,
     settings: Settings | None = None,
-    core: CoreFn = explore,
+    core: CoreFn = search,
 ) -> dict[str, object]:
     root = Path(repo_root) if repo_root is not None else Path.cwd()
     try:
@@ -30,14 +30,14 @@ def explore_repository_handler(
         )
         if max_turns is not None and settings is not None:
             effective_settings = replace(settings, max_turns=max_turns)
-        request = ExploreRequest(
+        request = SearchRequest(
             query=query,
             repo_root=root,
             max_turns=effective_settings.max_turns,
             citation=True if citation is None else citation,
         )
         return core(request, effective_settings).to_dict()
-    except ExplorerError as exc:
+    except SearchError as exc:
         return {"error": exc.to_dict()}
 
 
@@ -45,7 +45,7 @@ def create_server() -> Any:
     try:
         fastmcp_module = import_module("mcp.server.fastmcp")
     except ImportError as exc:
-        raise ExplorerError(
+        raise SearchError(
             "CONFIG_INVALID",
             "MCP SDK is not installed; install flash-context[mcp]",
         ) from exc
@@ -55,7 +55,7 @@ def create_server() -> Any:
     server._mcp_server.version = __version__
 
     @server.tool()  # type: ignore[untyped-decorator]
-    def explore_repository(
+    def search_repository(
         query: str,
         repo_root: str | None = None,
         max_turns: int | None = None,
@@ -63,12 +63,14 @@ def create_server() -> Any:
     ) -> dict[str, object]:
         """Find code or local text relevant to a focused repository question.
 
-        Explore read-only when implementation locations or supporting evidence
+        Search read-only when implementation locations or supporting evidence
         are unknown. Return validated file-line citations and bounded source
-        snippets, with warnings for incomplete exploration. repo_root defaults
-        to the server's working directory.
+        snippets, with warnings for incomplete search. repo_root defaults
+        to the server's working directory. max_turns defaults to the configured
+        limit, normally 12. For broader questions, increase max_turns or split
+        surveys into focused searches.
         """
-        return explore_repository_handler(
+        return search_repository_handler(
             query=query,
             repo_root=repo_root,
             max_turns=max_turns,

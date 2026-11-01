@@ -1,6 +1,6 @@
-# Shared exploration contract
+# Shared search contract
 
-CLI and MCP delegate to `explore(ExploreRequest, Settings)`. A request contains
+CLI and MCP delegate to `search(SearchRequest, Settings)`. A request contains
 `query`, `repo_root`, `max_turns` (12), and `citation` (true). The query must be
 nonblank, turns positive, and root an existing directory. Output formatting is
 an adapter concern. Configuration ownership and precedence are defined in
@@ -51,6 +51,14 @@ Python preflight distinguishes unique, missing, ambiguous, and incomplete scans;
 missing means no Python definition matches, not repository-wide absence.
 Incomplete scans retain diagnostics. Adjacent local ranges may merge.
 
+A single `path#qualified.symbol` query, optionally enclosed in matching quotes or
+backticks, resolves locally through the same parser as model anchors. A leaf
+symbol name must be unique in the file. Success returns zero turns, structural
+precision metadata, and snippets from the verified source snapshot. Missing,
+ambiguous, unsupported, unsafe, or oversized anchors retain model routing;
+parser-limit diagnostics survive that fallback. Queries with surrounding prose
+or multiple symbol anchors do not use this fast path.
+
 Exact-identifier queries require the case-sensitive whole token inside each
 accepted region, including derived fallback anchors. Filenames, nearby lines,
 substrings, and a byte-capped partial token do not qualify. Assignments,
@@ -75,14 +83,15 @@ Unsupported or invalid syntax uses line windows of ±5 lines, bounded by availab
 complete lines. Parser outcomes distinguish unsupported, invalid, limited, timed
 out, and successfully parsed input. Input caps and parser deadlines emit explicit
 incomplete-result diagnostics. Symbols require parsed definitions. Grammars are
-bundled and never downloaded during exploration.
+bundled and never downloaded during search.
 
-Defaults: 120 lines per model citation, 600 unique file-lines total, 16 citations,
+Defaults: 240 lines per model citation, 1200 unique file-lines total, 16 citations,
 16 candidate anchors, 1 MiB parser input per file. Cumulative parser input obeys
 `max_scan_bytes`; parsing/traversal obey tool deadlines. Explicit user ranges,
-previews, and deterministic local lookups retain read byte caps and are exempt
-from model precision budgets. Source lines follow LF boundaries, including CRLF;
-Unicode separators inside strings do not create additional lines.
+previews, and lexical local lookups retain read byte caps and are exempt
+from model precision budgets. Local symbol-anchor lookups obey parser and
+citation budgets as well as snippet byte caps. Source lines follow LF boundaries,
+including CRLF; Unicode separators inside strings do not create additional lines.
 
 ## Progress and termination
 
@@ -98,7 +107,7 @@ overlapping read excerpts by file and line. Trajectory metadata records why
 selection started without logging source text.
 Successful early answers and explicit `NO_CITATIONS_FOUND` remain terminal.
 
-Valid selected evidence ends exploration before trailing tool calls. Calls
+Valid selected evidence ends search before trailing tool calls. Calls
 repeated in later turns reuse observations; fresh siblings still execute, and
 an entirely repeated batch ends discovery. Exact queries may stop before a broad read
 when sufficient narrow evidence is already verified. Semantic queries never
@@ -109,7 +118,7 @@ remaining turns. If only documentation survives, results retain it with
 `truncated: true` and an implementation-unverified warning. Intent detection is
 lexical; explicit documentation and exact lookups retain their behavior.
 
-`NO_CITATIONS_FOUND` ends exploration without promoting previous reads.
+`NO_CITATIONS_FOUND` ends search without promoting previous reads.
 Token-limited completions return usable evidence with truncation and a warning,
 or enter selection when prior reads exist and a turn remains. Without either,
 they return `ENDPOINT_BAD_RESPONSE`. Empty messages without calls are

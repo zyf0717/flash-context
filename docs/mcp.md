@@ -1,6 +1,6 @@
 # MCP integration
 
-Use MCP when an editor or AI agent should call context exploration as a
+Use MCP when an editor or AI agent should call context search as a
 tool. The adapter delegates to the same core and safety boundary as the CLI.
 
 ## Published package
@@ -63,13 +63,15 @@ checkouts also load project-root `config.yaml` and `.env`.
 ## Tool
 
 ```text
-explore_repository(query, repo_root?, max_turns?, citation?)
+search_repository(query, repo_root?, max_turns?, citation?)
 ```
 
 `query` is required. `repo_root` defaults to the server working directory,
 `max_turns` to the effective configuration (normally 12), and `citation` to true.
+For broader questions, increase `max_turns` explicitly or split surveys into
+focused searches.
 Set `citation: false` to retain model prose. The tool delegates to the shared
 core and returns its [result or structured error](contracts.md#result), without
 CLI exit semantics. Initialization reports the flash-context package version.
-The discovered tool description explains read-only exploration, citations, and
+The discovered tool description explains read-only search, citations, and
 bounded snippets. Only stdio transport is supported.

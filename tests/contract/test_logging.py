@@ -3,11 +3,11 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-from flash_context.agent import explore
+from flash_context.agent import search
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
 from flash_context.types import (
-    ExploreRequest,
+    SearchRequest,
 )
 from tests.helpers import (
     _message_response,
@@ -35,7 +35,7 @@ def test_trajectory_log_omits_denied_file_content(tmp_path: Path) -> None:
     )
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
-    explore(ExploreRequest(query="read env", repo_root=repo), settings, client=client)
+    search(SearchRequest(query="read env", repo_root=repo), settings, client=client)
 
     logs = list(traj_dir.glob("*.json"))
     assert len(logs) == 1
@@ -55,8 +55,8 @@ def test_trajectory_log_omits_raw_location_text(tmp_path: Path) -> None:
     responses: Iterator[dict[str, object]] = iter([_message_response("answer.py:1")])
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
-    explore(
-        ExploreRequest(query="find the relevant answer", repo_root=repo),
+    search(
+        SearchRequest(query="find the relevant answer", repo_root=repo),
         settings,
         client=client,
     )

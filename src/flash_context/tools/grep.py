@@ -5,7 +5,7 @@ from pathlib import Path
 import regex
 
 from flash_context.tools.safety import PathSafety, ScanBudget, ScanLimits
-from flash_context.types import Diagnostic, ExplorerError, SearchHit, ToolObservation
+from flash_context.types import Diagnostic, SearchError, SearchHit, ToolObservation
 
 MAX_HIT_TEXT = 240
 
@@ -21,18 +21,18 @@ def repo_grep(
     limits: ScanLimits | None = None,
 ) -> ToolObservation:
     if not pattern:
-        raise ExplorerError("INVALID_TOOL_ARGUMENTS", "pattern is required")
+        raise SearchError("INVALID_TOOL_ARGUMENTS", "pattern is required")
     if max_results <= 0:
-        raise ExplorerError("CONFIG_INVALID", "max_results must be positive")
+        raise SearchError("CONFIG_INVALID", "max_results must be positive")
     if len(pattern) > 4096:
-        raise ExplorerError(
+        raise SearchError(
             "INVALID_GREP_PATTERN", "Grep pattern exceeds 4096 characters"
         )
     limit = min(max_results, configured_max_results or max_results)
     try:
         compiled = regex.compile(pattern, regex.VERSION0)
     except regex.error as exc:
-        raise ExplorerError(
+        raise SearchError(
             "INVALID_GREP_PATTERN",
             "Grep pattern is not a valid regular expression",
         ) from exc
@@ -82,7 +82,7 @@ def repo_grep(
                     budget.warnings.append(Diagnostic.UNREADABLE_FILE)
     except TimeoutError:
         budget.warnings.append(Diagnostic.GREP_TIMEOUT)
-    except ExplorerError as exc:
+    except SearchError as exc:
         if exc.code != "TOOL_LIMIT_EXCEEDED":
             raise
         budget.warnings.append(Diagnostic.GREP_LIMIT)

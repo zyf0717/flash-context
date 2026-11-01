@@ -10,16 +10,16 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from flash_context.agent import explore
+from flash_context.agent import search
 from flash_context.config import Settings, SettingsOverrides, load_settings
 from flash_context.llm import ChatClient
 from flash_context.logging import TrajectoryRecorder
 from flash_context.tools import read_file, repo_glob, repo_grep
 from flash_context.tools.safety import ScanLimits
 from flash_context.types import (
-    ExploreRequest,
-    ExplorerError,
+    SearchError,
     SearchHit,
+    SearchRequest,
     ToolObservation,
 )
 
@@ -29,7 +29,7 @@ def test_sensitive_names_are_denied(tmp_path: Path, path: str) -> None:
     file = tmp_path / path
     file.parent.mkdir(exist_ok=True)
     file.write_text("secret")
-    with pytest.raises(ExplorerError, match="PATH_DENIED"):
+    with pytest.raises(SearchError, match="PATH_DENIED"):
         read_file(repo_root=tmp_path, path=path, max_bytes=100)
     assert repo_glob(repo_root=tmp_path, pattern="**/*", max_results=20).matches == []
     assert not repo_grep(repo_root=tmp_path, pattern="secret", max_results=20).hits
@@ -38,7 +38,7 @@ def test_sensitive_names_are_denied(tmp_path: Path, path: str) -> None:
 def test_both_symlink_names_are_checked(tmp_path: Path) -> None:
     (tmp_path / "public.txt").write_text("test")
     (tmp_path / ".env").symlink_to("public.txt")
-    with pytest.raises(ExplorerError, match="PATH_DENIED"):
+    with pytest.raises(SearchError, match="PATH_DENIED"):
         read_file(repo_root=tmp_path, path=".env", max_bytes=10)
     (tmp_path / "alias").symlink_to(".env")
     # Resolution through a denied alias must not hide its lexical name.
@@ -100,7 +100,7 @@ def test_regex_timeout_and_oversized_lines(tmp_path: Path) -> None:
 def test_unreadable_file_is_structured(tmp_path: Path) -> None:
     (tmp_path / "a.txt").touch()
     with patch.object(Path, "open", side_effect=PermissionError):
-        with pytest.raises(ExplorerError, match="PATH_UNREADABLE"):
+        with pytest.raises(SearchError, match="PATH_UNREADABLE"):
             read_file(repo_root=tmp_path, path="a.txt", max_bytes=10)
         result = repo_grep(repo_root=tmp_path, pattern="x", max_results=1)
         assert result.truncated and result.warnings
@@ -111,9 +111,9 @@ def test_trajectory_rejects_repository_destination_and_omits_text(
 ) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    request = ExploreRequest(query="SECRET_QUERY", repo_root=repo)
-    with pytest.raises(ExplorerError, match="CONFIG_INVALID"):
-        explore(request, Settings(traj_dir=repo / "logs"))
+    request = SearchRequest(query="SECRET_QUERY", repo_root=repo)
+    with pytest.raises(SearchError, match="CONFIG_INVALID"):
+        search(request, Settings(traj_dir=repo / "logs"))
     recorder = TrajectoryRecorder(tmp_path / "logs", request)
     recorder.record_model_turn(
         1, {"content": "SECRET_MODEL", "arguments": "SECRET_ARG"}
@@ -167,8 +167,8 @@ def test_trajectory_rejects_repository_destination_and_omits_text(
 )
 def test_ambiguous_intent_uses_model(tmp_path: Path, query: str) -> None:
     (tmp_path / "a.py").write_text("def alpha(): pass\ndef beta(): pass\n")
-    with pytest.raises(ExplorerError, match="CONFIG_MISSING_ENDPOINT"):
-        explore(ExploreRequest(query=query, repo_root=tmp_path), Settings())
+    with pytest.raises(SearchError, match="CONFIG_MISSING_ENDPOINT"):
+        search(SearchRequest(query=query, repo_root=tmp_path), Settings())
 
 
 def test_config_diagnostics_and_explicit_log_disable(
@@ -183,10 +183,10 @@ def test_config_diagnostics_and_explicit_log_disable(
             monkeypatch.delenv(key)
     yaml = tmp_path / "config.yaml"
     yaml.write_text("model:\n  api_key: [SECRET_VALUE\n")
-    with pytest.raises(ExplorerError) as error:
+    with pytest.raises(SearchError) as error:
         load_settings()
     assert "SECRET_VALUE" not in json.dumps(error.value.to_dict())
-    yaml.write_text("explorer:\n  traj_dir: logs\ntools:\n  max_scan_bytes: 100\n")
+    yaml.write_text("search:\n  traj_dir: logs\ntools:\n  max_scan_bytes: 100\n")
     monkeypatch.setenv("FLASH_CONTEXT_TRAJ_DIR", "")
     monkeypatch.setenv("FLASH_CONTEXT_MAX_SCAN_BYTES", "200")
     assert load_settings().traj_dir is None
@@ -197,7 +197,7 @@ def test_config_diagnostics_and_explicit_log_disable(
     monkeypatch.delenv("FLASH_CONTEXT_TRAJ_DIR")
     assert load_settings(overrides=SettingsOverrides(traj_dir=None)).traj_dir is None
     monkeypatch.setenv("FLASH_CONTEXT_TOOL_TIMEOUT_SECONDS", "nan")
-    with pytest.raises(ExplorerError, match="CONFIG_INVALID"):
+    with pytest.raises(SearchError, match="CONFIG_INVALID"):
         load_settings()
 
 
@@ -229,8 +229,8 @@ def test_model_ranges_and_endpoint_termination(tmp_path: Path) -> None:
 
     with_client = ChatClient(settings, transport=httpx.MockTransport(handle))
     try:
-        result = explore(
-            ExploreRequest(query="Find the relevant answer", repo_root=tmp_path),
+        result = search(
+            SearchRequest(query="Find the relevant answer", repo_root=tmp_path),
             settings,
             client=with_client,
         )
@@ -249,9 +249,9 @@ def test_model_ranges_and_endpoint_termination(tmp_path: Path) -> None:
             ),
         )
         try:
-            with pytest.raises(ExplorerError, match="ENDPOINT_BAD_RESPONSE"):
-                explore(
-                    ExploreRequest(
+            with pytest.raises(SearchError, match="ENDPOINT_BAD_RESPONSE"):
+                search(
+                    SearchRequest(
                         query="Find the relevant answer", repo_root=tmp_path
                     ),
                     settings,
@@ -269,9 +269,9 @@ def test_model_ranges_and_endpoint_termination(tmp_path: Path) -> None:
         ),
     )
     try:
-        with pytest.raises(ExplorerError, match="Too many tool calls"):
-            explore(
-                ExploreRequest(query="Find the relevant answer", repo_root=tmp_path),
+        with pytest.raises(SearchError, match="Too many tool calls"):
+            search(
+                SearchRequest(query="Find the relevant answer", repo_root=tmp_path),
                 settings,
                 client=client,
             )
@@ -309,8 +309,8 @@ def test_short_preview_and_partial_completion(tmp_path: Path) -> None:
 
     client = ChatClient(settings, transport=httpx.MockTransport(handle))
     try:
-        result = explore(
-            ExploreRequest(query="Find the relevant answer", repo_root=tmp_path),
+        result = search(
+            SearchRequest(query="Find the relevant answer", repo_root=tmp_path),
             settings,
             client=client,
         )
@@ -325,7 +325,7 @@ def test_short_preview_and_partial_completion(tmp_path: Path) -> None:
 
 def test_array_observation_caps_and_logging_failure(tmp_path: Path) -> None:
     from flash_context.execution import _model_observation_payload
-    from flash_context.types import Citation, ExploreResult
+    from flash_context.types import Citation, SearchResult
 
     observation = ToolObservation(
         hits=[SearchHit("a.py", i, "x" * 240) for i in range(50)]
@@ -334,9 +334,9 @@ def test_array_observation_caps_and_logging_failure(tmp_path: Path) -> None:
     assert payload["truncated"]
     assert len(json.dumps(payload["hits"])) < 650
     recorder = TrajectoryRecorder(
-        tmp_path / "logs", ExploreRequest(query="test", repo_root=tmp_path / "repo")
+        tmp_path / "logs", SearchRequest(query="test", repo_root=tmp_path / "repo")
     )
-    result = ExploreResult("test", str(tmp_path), "a.py:1", [Citation("a.py", 1, 1)], 1)
+    result = SearchResult("test", str(tmp_path), "a.py:1", [Citation("a.py", 1, 1)], 1)
     with patch.object(Path, "mkdir", side_effect=PermissionError):
         recorder.finish(result=result)
     assert result.warnings == ["trajectory log could not be written"]
@@ -360,13 +360,13 @@ def test_cli_and_mcp_reject_internal_logging(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     from flash_context import cli
-    from flash_context.mcp_server import explore_repository_handler
+    from flash_context.mcp_server import search_repository_handler
 
     settings = Settings(traj_dir=tmp_path / "logs")
     monkeypatch.setattr(cli, "load_settings", lambda **kwargs: settings)
-    assert cli.main(["explore", "--query", "Find answer", "--repo", str(tmp_path)]) == 3
+    assert cli.main(["search", "--query", "Find answer", "--repo", str(tmp_path)]) == 3
     assert "CONFIG_INVALID" in capsys.readouterr().err
-    result = explore_repository_handler(
+    result = search_repository_handler(
         query="Find the relevant answer", repo_root=str(tmp_path), settings=settings
     )
     assert cast(dict[str, object], result["error"])["code"] == "CONFIG_INVALID"

@@ -28,7 +28,7 @@ async def check_mcp() -> None:
         assert result.serverInfo.name == "flash-context"
         assert result.serverInfo.version == __version__
     tools = await create_server().list_tools()
-    assert [tool.name for tool in tools] == ["explore_repository"]
+    assert [tool.name for tool in tools] == ["search_repository"]
     assert tools[0].inputSchema["required"] == ["query"]
     assert tools[0].description
 
@@ -55,7 +55,7 @@ def main() -> None:
             result = subprocess.run(
                 [
                     "flash-context",
-                    "explore",
+                    "search",
                     "--repo",
                     directory,
                     "--query",

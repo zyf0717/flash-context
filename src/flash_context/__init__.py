@@ -1,4 +1,4 @@
-"""Read-only repository context explorer."""
+"""Repository search and context retrieval for AI agents."""
 
 from importlib.metadata import version
 

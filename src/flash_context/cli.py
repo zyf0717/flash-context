@@ -6,17 +6,17 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from flash_context.agent import explore, format_text_result
+from flash_context.agent import format_text_result, search
 from flash_context.config import SettingsOverrides, load_settings
 from flash_context.mcp_server import run_mcp
-from flash_context.types import ExploreRequest, ExplorerError
+from flash_context.types import SearchError, SearchRequest
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
-    if args.command == "explore":
-        return _run_explore(args)
+    if args.command == "search":
+        return _run_search(args)
     if args.command == "mcp":
         return _run_mcp(args)
     parser.print_help()
@@ -27,33 +27,33 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="flash-context")
     subparsers = parser.add_subparsers(dest="command")
 
-    explore_parser = subparsers.add_parser("explore", help="explore a repository")
-    explore_parser.add_argument("--query", required=True)
-    explore_parser.add_argument("--repo", required=True, type=Path)
-    explore_parser.add_argument("--max-turns", type=int)
-    explore_parser.add_argument(
+    search_parser = subparsers.add_parser("search", help="search a repository")
+    search_parser.add_argument("--query", required=True)
+    search_parser.add_argument("--repo", required=True, type=Path)
+    search_parser.add_argument("--max-turns", type=int)
+    search_parser.add_argument(
         "--citation", action=argparse.BooleanOptionalAction, default=True
     )
-    explore_parser.add_argument("--format", choices=("text", "json"), default="text")
+    search_parser.add_argument("--format", choices=("text", "json"), default="text")
 
     mcp_parser = subparsers.add_parser("mcp", help="run the MCP adapter")
     mcp_parser.add_argument("--transport", default="stdio", choices=("stdio",))
     return parser
 
 
-def _run_explore(args: argparse.Namespace) -> int:
+def _run_search(args: argparse.Namespace) -> int:
     try:
         repo_root = args.repo.resolve()
         overrides = SettingsOverrides(max_turns=args.max_turns)
         settings = load_settings(overrides=overrides)
-        request = ExploreRequest(
+        request = SearchRequest(
             query=args.query,
             repo_root=repo_root,
             max_turns=settings.max_turns,
             citation=args.citation,
         )
-        result = explore(request, settings)
-    except ExplorerError as exc:
+        result = search(request, settings)
+    except SearchError as exc:
         print(f"{exc.code}: {exc.message}", file=sys.stderr)
         return _exit_code(exc)
 
@@ -73,13 +73,13 @@ def _run_explore(args: argparse.Namespace) -> int:
 def _run_mcp(args: argparse.Namespace) -> int:
     try:
         run_mcp(transport=args.transport)
-    except ExplorerError as exc:
+    except SearchError as exc:
         print(f"{exc.code}: {exc.message}", file=sys.stderr)
         return _exit_code(exc)
     return 0
 
 
-def _exit_code(error: ExplorerError) -> int:
+def _exit_code(error: SearchError) -> int:
     if error.code.startswith("CONFIG_") or error.code == "QUERY_EMPTY":
         return 3 if error.code.startswith("CONFIG_") else 2
     if error.code.startswith("PATH_") or error.code == "REPO_NOT_FOUND":

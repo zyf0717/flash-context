@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from flash_context.tools.safety import PathSafety, ScanBudget, ScanLimits
-from flash_context.types import Diagnostic, ExplorerError, ToolObservation
+from flash_context.types import Diagnostic, SearchError, ToolObservation
 
 
 def repo_glob(
@@ -15,9 +15,9 @@ def repo_glob(
     limits: ScanLimits | None = None,
 ) -> ToolObservation:
     if not pattern:
-        raise ExplorerError("INVALID_TOOL_ARGUMENTS", "pattern is required")
+        raise SearchError("INVALID_TOOL_ARGUMENTS", "pattern is required")
     if max_results <= 0:
-        raise ExplorerError("CONFIG_INVALID", "max_results must be positive")
+        raise SearchError("CONFIG_INVALID", "max_results must be positive")
     safety = PathSafety(repo_root, tuple(ignore or ()))
     matches: list[str] = []
     truncated = False
@@ -28,7 +28,7 @@ def repo_glob(
                 truncated = True
                 break
             matches.append(safety.relative_or_raw(path))
-    except ExplorerError as exc:
+    except SearchError as exc:
         if exc.code != "TOOL_LIMIT_EXCEEDED":
             raise
         budget.warnings.append(Diagnostic.GLOB_LIMIT)

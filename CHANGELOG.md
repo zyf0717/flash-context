@@ -4,6 +4,44 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-01
+
+### Changed
+
+- Position flash-context as repository search and context retrieval for AI agents,
+  with exact lookups and model-guided search returning focused source evidence.
+- Rename the CLI command to `search`, the MCP tool to `search_repository`, and
+  the shared Python API and YAML section to use search terminology. Remove the
+  previous names without compatibility aliases.
+- Increase default context budgets: reads from 120 to 480 lines and 12,000 to
+  48,000 bytes, observations from 6,000 to 24,000 characters, grep results from
+  50 to 100, and completion tokens from 512 to 4,096 per model response.
+  Increase citation limits from 120 to 240 lines per citation and 600 to 1,200
+  unique lines total. The default remains twelve turns.
+- Explain the `max_turns` override and focused-query guidance in MCP discovery.
+
+### Fixed
+
+- Resolve single `path#qualified.symbol` queries locally, including unique leaf
+  names and quoted anchors, before requiring an endpoint (#24). Preserve parsed
+  precision metadata and source-snapshot snippets on zero-turn results. Unresolved
+  anchors retain model fallback and parser-limit diagnostics.
+
+### Migration
+
+- Replace `flash-context explore` with `flash-context search` and update MCP
+  callers from `explore_repository` to `search_repository`.
+- Python callers must import `search` from `flash_context.agent`,
+  `search_repository_handler` from `flash_context.mcp_server`, and `SearchRequest`,
+  `SearchResult`, and `SearchError` from `flash_context.types` in place of
+  `explore`, `explore_repository_handler`, `ExploreRequest`, `ExploreResult`, and
+  `ExplorerError` respectively.
+- Rename the `explorer` section in source-checkout `config.yaml` files to `search`.
+  Environment variable names, request fields, and result schemas are unchanged.
+- Explicit budget settings still take precedence. Update existing YAML or
+  environment overrides to use the larger defaults; lower values remain valid
+  for smaller model context windows.
+
 ## [0.4.2] - 2026-11-01
 
 ### Changed

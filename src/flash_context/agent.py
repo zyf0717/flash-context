@@ -27,10 +27,10 @@ from flash_context.types import (
     Citation,
     CitationPrecision,
     Diagnostic,
-    ExploreRequest,
-    ExplorerError,
-    ExploreResult,
     RawLocation,
+    SearchError,
+    SearchRequest,
+    SearchResult,
     ToolCall,
     ToolObservation,
     source_lines,
@@ -65,17 +65,18 @@ class LocalEvidence:
     warnings: list[Diagnostic] = field(default_factory=list)
 
 
-def explore(
-    request: ExploreRequest,
+def search(
+    request: SearchRequest,
     settings: Settings,
     *,
     client: ChatClient | None = None,
-) -> ExploreResult:
+) -> SearchResult:
     request.validate()
     repo_root = request.repo_root.resolve()
     validate_trajectory_dir(settings.traj_dir, repo_root)
     intent = QueryIntent.parse(request.query)
-    evidence = EvidenceState(symbol=intent.symbol)
+    resolver = CitationResolver(repo_root, settings, intent.symbol)
+    evidence = EvidenceState(symbol=intent.symbol, resolver=resolver)
     fast_result = _try_exact_fast_path(
         request,
         repo_root=repo_root,
@@ -94,9 +95,8 @@ def explore(
             turns_used=0,
             truncated=fast_result.truncated,
             warnings=fast_result.warnings,
+            resolver=resolver,
         )
-    resolver = CitationResolver(repo_root, settings, intent.symbol)
-    evidence.resolver = resolver
     settings.require_endpoint()
     effective_max_turns = min(request.max_turns, settings.max_turns)
     recorder = TrajectoryRecorder(settings.traj_dir, request)
@@ -165,7 +165,7 @@ def explore(
                 isinstance(raw_calls, list)
                 and len(raw_calls) > settings.max_tool_calls_per_turn
             ):
-                raise ExplorerError(
+                raise SearchError(
                     "ENDPOINT_BAD_RESPONSE", "Too many tool calls in one turn"
                 )
             recorder.record_model_turn(turn, message)
@@ -188,7 +188,7 @@ def explore(
                         selection_reason = "token_limit"
                         answer = ""
                         continue
-                    raise ExplorerError(
+                    raise SearchError(
                         "ENDPOINT_BAD_RESPONSE",
                         "Completion token limit reached without evidence",
                     )
@@ -351,7 +351,7 @@ def explore(
         )
         recorder.finish(result=result)
         return result
-    except ExplorerError as exc:
+    except SearchError as exc:
         recorder.finish(error=exc)
         raise
     finally:
@@ -359,7 +359,7 @@ def explore(
             chat_client.close()
 
 
-def format_text_result(result: ExploreResult, *, citation: bool) -> str:
+def format_text_result(result: SearchResult, *, citation: bool) -> str:
     if citation:
         return _citation_text(result.citations)
     return result.answer
@@ -367,7 +367,7 @@ def format_text_result(result: ExploreResult, *, citation: bool) -> str:
 
 def _finalize_result(
     *,
-    request: ExploreRequest,
+    request: SearchRequest,
     repo_root: Path,
     settings: Settings,
     answer: str,
@@ -377,7 +377,7 @@ def _finalize_result(
     warnings: list[Diagnostic],
     intent: QueryIntent,
     resolver: CitationResolver | None = None,
-) -> ExploreResult:
+) -> SearchResult:
     if resolver is not None:
         warnings.extend(
             w for source in resolver.sources.values() for w in source.warnings
@@ -395,7 +395,9 @@ def _finalize_result(
         if request.query.strip("`\"' ") == (citations[0].path if citations else ""):
             kind = "preview"
         citations = [
-            replace(
+            c
+            if c.precision is not None
+            else replace(
                 c,
                 precision=CitationPrecision(c.end_line - c.start_line + 1, kind),
             )
@@ -417,7 +419,7 @@ def _finalize_result(
         warnings=warnings,
         resolver=resolver,
     )
-    return ExploreResult(
+    return SearchResult(
         query=request.query,
         repo_root=str(repo_root),
         answer=answer,
@@ -485,7 +487,7 @@ def _extract_raw_locations(
                 ignore=settings.ignore,
                 limits=settings.limits,
             )
-        except ExplorerError:
+        except SearchError:
             warnings.append(Diagnostic.RAW_UNREADABLE)
             continue
         span = observation.span
@@ -507,13 +509,19 @@ def _extract_raw_locations(
 
 
 def _try_exact_fast_path(
-    request: ExploreRequest,
+    request: SearchRequest,
     *,
     repo_root: Path,
     settings: Settings,
     evidence: EvidenceState,
     intent: QueryIntent,
 ) -> LocalEvidence | None:
+    if intent.symbol_anchor is not None:
+        assert evidence.resolver is not None
+        resolution = evidence.resolver.parse(intent.symbol_anchor)
+        if resolution.citations:
+            return LocalEvidence(resolution.citations, False, resolution.warnings)
+        return None
     bare_path = request.query.strip()
     if len(bare_path) >= 2 and bare_path[0] in "`'\"" and bare_path[-1] == bare_path[0]:
         bare_path = bare_path[1:-1]
@@ -528,7 +536,7 @@ def _try_exact_fast_path(
                 ignore=settings.ignore,
                 limits=settings.limits,
             )
-        except ExplorerError:
+        except SearchError:
             pass  # Missing, empty, or unsafe paths retain normal model routing.
         else:
             return LocalEvidence(
@@ -713,7 +721,7 @@ def _validate_citations(
                 ignore=settings.ignore,
                 limits=settings.limits,
             )
-        except ExplorerError as exc:
+        except SearchError as exc:
             if exc.code == "TOOL_LIMIT_EXCEEDED":
                 warnings.append(Diagnostic.READ_LIMIT)
             continue
@@ -760,7 +768,7 @@ def _citations_from_reads(observations: list[ToolObservation]) -> list[Citation]
 
 
 def _should_finalize_before_tool_calls(
-    request: ExploreRequest,
+    request: SearchRequest,
     evidence: EvidenceState,
     tool_calls: list[ToolCall],
     settings: Settings,
@@ -846,7 +854,7 @@ def _message_has_tool_calls(message: dict[str, Any]) -> bool:
 
 
 def _initial_messages(
-    request: ExploreRequest,
+    request: SearchRequest,
     file_sample: ToolObservation,
     settings: Settings,
 ) -> list[dict[str, Any]]:
@@ -926,7 +934,7 @@ def _int_argument(arguments: dict[str, object], key: str) -> int | None:
 
 
 def _selection_messages(
-    request: ExploreRequest, messages: list[dict[str, Any]]
+    request: SearchRequest, messages: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
     observations: list[str] = []
     read_lines: dict[str, dict[int, str]] = {}

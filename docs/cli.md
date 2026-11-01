@@ -1,7 +1,7 @@
 # CLI
 
 ```bash
-flash-context explore --repo PATH --query TEXT [--max-turns N] \
+flash-context search --repo PATH --query TEXT [--max-turns N] \
   [--citation | --no-citation] [--format text|json]
 ```
 
@@ -23,7 +23,7 @@ stderr, without source contents or secrets.
 | 3 | Configuration error |
 | 4 | Repository/path error |
 | 5 | Endpoint error |
-| 6 | Other exploration error, or empty result after a scan/parser limit or timeout |
+| 6 | Other search error, or empty result after a scan/parser limit or timeout |
 
 Ordinary result caps alone do not change exit status. Endpoint-free lookups,
 model corrections, termination, and evidence limits are defined once in the

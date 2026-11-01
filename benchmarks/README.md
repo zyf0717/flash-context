@@ -21,7 +21,7 @@ proxies; evaluate recall and tightness together. They do not measure semantics.
 For release comparisons, keep this script and fixture manifest fixed and run the
 script with each release's installed Python environment, from a directory outside
 the source checkout. For example, `/tmp/old-env/bin/python /path/to/flash-context/scripts/citation_benchmark.py`.
-The runner imports only shared exploration/configuration interfaces and does not
+The runner imports only shared search/configuration interfaces and does not
 use the v0.4.0 parser to calculate expected results. Keep model, settings, and
 repetition count identical. Standard CI uses mocked endpoints; live trends are
 opt-in and depend on the configured model.

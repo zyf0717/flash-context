@@ -1,4 +1,4 @@
-"""Classify lookup intent once and parse explicit user ranges."""
+"""Classify lookup intent and share symbol/line anchor syntax."""
 
 from __future__ import annotations
 
@@ -7,6 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from flash_context.types import Citation
+
+PATH = r"(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+"
+ANCHOR = re.compile(
+    rf"(?<![\w./-])(?P<path>{PATH})(?:#(?P<symbol>[A-Za-z_$][\w$]*(?:[.:]+[\w$]+)*)|:(?P<line>[1-9][0-9]*)(?P<range>-[0-9]+)?)(?![\w-])"
+)
 
 CITATION_RE = re.compile(
     r"(?P<path>(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+)"
@@ -87,9 +92,24 @@ class QueryIntent:
     symbol: str | None
     prefer_source: bool
     ranges: tuple[Citation, ...]
+    symbol_anchor: str | None = None
 
     @classmethod
     def parse(cls, query: str) -> QueryIntent:
+        anchor = query.strip()
+        if len(anchor) >= 2 and anchor[0] in "`'\"" and anchor[-1] == anchor[0]:
+            anchor = anchor[1:-1]
+        match = ANCHOR.fullmatch(anchor)
+        if match is not None and match["symbol"]:
+            return cls(
+                exact=True,
+                path=match["path"],
+                target=None,
+                symbol=None,
+                prefer_source=False,
+                ranges=(),
+                symbol_anchor=anchor,
+            )
         paths = list(EXPLICIT_PATH_RE.finditer(query))
         quotes = list(EXACT_TEXT_RE.finditer(query))
         ranges = extract_citations(query)

@@ -1,7 +1,7 @@
 # Architecture
 
 ```text
-CLI / MCP → shared exploration core → OpenAI-compatible chat completions
+CLI / MCP → shared search core → OpenAI-compatible chat completions
                          ↓
               read_file / repo_glob / repo_grep
 ```

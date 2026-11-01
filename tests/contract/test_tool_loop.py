@@ -9,12 +9,12 @@ from typing import Any, cast
 import pytest
 
 import flash_context.execution as execution
-from flash_context.agent import explore
+from flash_context.agent import search
 from flash_context.config import Settings
 from flash_context.execution import _model_observation_payload
 from flash_context.llm import ChatClient
 from flash_context.types import (
-    ExploreRequest,
+    SearchRequest,
     ToolCall,
     ToolObservation,
 )
@@ -42,8 +42,8 @@ def test_chat_payload_includes_latency_controls(tmp_path: Path) -> None:
     )
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
-    explore(
-        ExploreRequest(query="Find request validation", repo_root=repo),
+    search(
+        SearchRequest(query="Find request validation", repo_root=repo),
         settings,
         client=client,
     )
@@ -90,8 +90,8 @@ def test_duplicate_calls_reuse_observations_and_preserve_fresh_work(
     payloads: list[dict[str, object]] = []
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, payloads))
-    result = explore(
-        ExploreRequest(query="Find all definitions", repo_root=tmp_path),
+    result = search(
+        SearchRequest(query="Find all definitions", repo_root=tmp_path),
         settings,
         client=client,
     )
@@ -107,7 +107,7 @@ def test_duplicate_calls_reuse_observations_and_preserve_fresh_work(
         "d",
     ]
     assert observations[0]["content"] != observations[2]["content"]
-    assert "repeated tool call stopped exploration" not in result.warnings
+    assert "repeated tool call stopped search" not in result.warnings
 
 
 def test_model_read_without_range_is_bounded_before_observation(
@@ -134,8 +134,8 @@ def test_model_read_without_range_is_bounded_before_observation(
     )
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
-    result = explore(
-        ExploreRequest(query="Find the relevant answer", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find the relevant answer", repo_root=repo),
         settings,
         client=client,
     )
@@ -172,8 +172,8 @@ def test_model_observation_content_is_capped_for_endpoint_payload(
     )
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
-    explore(
-        ExploreRequest(query="Find the relevant answer", repo_root=repo),
+    search(
+        SearchRequest(query="Find the relevant answer", repo_root=repo),
         settings,
         client=client,
     )
@@ -182,6 +182,42 @@ def test_model_observation_content_is_capped_for_endpoint_payload(
     assert len(str(observation["content"])) == 20
     assert observation["content_truncated_by_chars"] is True
     assert observation["truncated"] is True
+
+
+def test_default_budgets_preserve_larger_source_context(tmp_path: Path) -> None:
+    source = (
+        "def calculate():\n"
+        + "".join(f"    value_{i} = {i}  # {'context ' * 8}\n" for i in range(198))
+        + "    return value_197\n"
+    )
+    (tmp_path / "calculation.py").write_text(source, encoding="utf-8")
+    responses = iter(
+        [
+            _tool_response("grep", "repo_grep", {"pattern": "def calculate"}),
+            _tool_response("read", "read_file", {"path": "calculation.py"}),
+            _message_response("calculation.py#calculate"),
+        ]
+    )
+    payloads: list[dict[str, object]] = []
+    settings = Settings(base_url="http://test/v1", model="test-model")
+    client = ChatClient(settings, transport=_mock_transport(responses, payloads))
+    try:
+        result = search(
+            SearchRequest("Find the calculation implementation", tmp_path),
+            settings,
+            client=client,
+        )
+    finally:
+        client.close()
+
+    observation = _last_tool_payload(payloads)
+    assert observation["line_range"] == "1-200"
+    assert "200:     return value_197\n" in str(observation["content"])
+    assert observation["truncated"] is False
+    assert all(payload["max_tokens"] == 4096 for payload in payloads)
+    assert result.answer == "calculation.py:1-200"
+    assert result.raw_locations[0].text == source
+    assert not result.truncated
 
 
 def test_same_turn_tool_calls_execute_concurrently_and_preserve_order(
@@ -229,8 +265,8 @@ def test_same_turn_tool_calls_execute_concurrently_and_preserve_order(
 
     monkeypatch.setattr(execution, "_execute_tool_call", fake_execute)
 
-    explore(
-        ExploreRequest(query="Find independent files", repo_root=repo),
+    search(
+        SearchRequest(query="Find independent files", repo_root=repo),
         settings,
         client=client,
     )
@@ -293,8 +329,8 @@ def test_max_parallel_tools_one_preserves_serial_execution(
 
     monkeypatch.setattr(execution, "_execute_tool_call", fake_execute)
 
-    explore(
-        ExploreRequest(query="Find independent files", repo_root=repo),
+    search(
+        SearchRequest(query="Find independent files", repo_root=repo),
         settings,
         client=client,
     )
@@ -325,8 +361,8 @@ def test_same_turn_tool_error_does_not_cancel_sibling_tool(
     settings = Settings(base_url="http://test/v1", model="test-model")
     client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
 
-    explore(
-        ExploreRequest(query="Find safe files", repo_root=repo),
+    search(
+        SearchRequest(query="Find safe files", repo_root=repo),
         settings,
         client=client,
     )

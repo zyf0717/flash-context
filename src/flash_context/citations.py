@@ -12,6 +12,7 @@ from tree_sitter import Node, Parser
 from tree_sitter_language_pack import SupportedLanguage, get_language
 
 from flash_context.config import Settings
+from flash_context.queries import ANCHOR
 from flash_context.tools import read_file
 from flash_context.tools.safety import ScanBudget
 from flash_context.types import (
@@ -20,8 +21,8 @@ from flash_context.types import (
     Citation,
     CitationPrecision,
     Diagnostic,
-    ExplorerError,
     RawLocation,
+    SearchError,
     source_lines,
 )
 
@@ -79,10 +80,6 @@ DEFINITIONS = frozenset(
         "anonymous_function",
         "protocol_declaration",
     }
-)
-PATH = r"(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+"
-ANCHOR = re.compile(
-    rf"(?<![\w./-])(?P<path>{PATH})(?:#(?P<symbol>[A-Za-z_$][\w$]*(?:[.:]+[\w$]+)*)|:(?P<line>[1-9][0-9]*)(?P<range>-[0-9]+)?)(?![\w-])"
 )
 
 
@@ -183,7 +180,7 @@ class CitationResolver:
                 ignore=self.settings.ignore,
                 limits=self.settings.limits,
             )
-        except ExplorerError as exc:
+        except SearchError as exc:
             if exc.code == "TOOL_LIMIT_EXCEEDED":
                 source = Source([], None, "limited", [Diagnostic.READ_LIMIT])
                 self.sources[path] = source
@@ -280,7 +277,7 @@ class CitationResolver:
                             (child, child_scope)
                             for child in reversed(node.named_children)
                         )
-            except (ValueError, ExplorerError):
+            except (ValueError, SearchError):
                 regions = None
                 status = "timeout"
         if status == "limited":

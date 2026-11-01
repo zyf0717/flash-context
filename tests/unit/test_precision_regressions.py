@@ -3,12 +3,12 @@ from pathlib import Path
 import pytest
 
 import flash_context.citations as boundaries
-from flash_context.agent import explore
+from flash_context.agent import search
 from flash_context.citations import CitationResolver
 from flash_context.config import Settings
 from flash_context.execution import _model_observation_payload
 from flash_context.llm import ChatClient
-from flash_context.types import Diagnostic, ExploreRequest, ToolObservation
+from flash_context.types import Diagnostic, SearchRequest, ToolObservation
 from scripts.citation_benchmark import cases
 from tests.helpers import _message_response, _mock_transport, _tool_response
 
@@ -28,8 +28,8 @@ def test_repair_feedback_does_not_survive_tool_only_turn(
     settings = Settings(base_url="http://test/v1", model="mock", max_turns=3)
     client = ChatClient(settings, transport=_mock_transport(replies))
     try:
-        result = explore(
-            ExploreRequest("Where is behavior?", tmp_path, citation=not prose),
+        result = search(
+            SearchRequest("Where is behavior?", tmp_path, citation=not prose),
             settings,
             client=client,
         )
@@ -123,8 +123,8 @@ def test_explicit_no_result_does_not_restore_matching_reads(tmp_path: Path) -> N
     )
     client = ChatClient(settings, transport=_mock_transport(replies))
     try:
-        result = explore(
-            ExploreRequest("Find `MissingPythonName`", tmp_path),
+        result = search(
+            SearchRequest("Find `MissingPythonName`", tmp_path),
             settings,
             client=client,
         )

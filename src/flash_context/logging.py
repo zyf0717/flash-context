@@ -8,16 +8,16 @@ from uuid import uuid4
 
 from flash_context.types import (
     Diagnostic,
-    ExploreRequest,
-    ExplorerError,
-    ExploreResult,
+    SearchError,
+    SearchRequest,
+    SearchResult,
     ToolObservation,
 )
 
 
 def validate_trajectory_dir(traj_dir: Path | None, repo_root: Path) -> None:
     if traj_dir is not None and traj_dir.resolve().is_relative_to(repo_root.resolve()):
-        raise ExplorerError(
+        raise SearchError(
             "CONFIG_INVALID", "Trajectory directory must be outside the repository"
         )
 
@@ -25,7 +25,7 @@ def validate_trajectory_dir(traj_dir: Path | None, repo_root: Path) -> None:
 class TrajectoryRecorder:
     """Persist structural metadata only; repository/model text is never logged."""
 
-    def __init__(self, traj_dir: Path | None, request: ExploreRequest) -> None:
+    def __init__(self, traj_dir: Path | None, request: SearchRequest) -> None:
         validate_trajectory_dir(traj_dir, request.repo_root)
         self._traj_dir = traj_dir
         self._turns: list[dict[str, object]] = []
@@ -87,7 +87,7 @@ class TrajectoryRecorder:
             self._turns.append(metadata)
 
     def finish(
-        self, *, result: ExploreResult | None = None, error: ExplorerError | None = None
+        self, *, result: SearchResult | None = None, error: SearchError | None = None
     ) -> None:
         if self._traj_dir is None:
             return

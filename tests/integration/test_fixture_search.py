@@ -3,10 +3,10 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-from flash_context.agent import explore
+from flash_context.agent import search
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
-from flash_context.types import ExploreRequest
+from flash_context.types import SearchRequest
 from tests.helpers import _message_response, _mock_transport, _tool_response
 
 
@@ -25,8 +25,8 @@ def test_fixture_repository_returns_validation_citation() -> None:
     )
     client = ChatClient(settings, transport=_mock_transport(responses))
 
-    result = explore(
-        ExploreRequest(query="Find validation logic", repo_root=repo),
+    result = search(
+        SearchRequest(query="Find validation logic", repo_root=repo),
         settings,
         client=client,
     )

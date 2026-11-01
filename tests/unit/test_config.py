@@ -6,7 +6,7 @@ import pytest
 
 from flash_context import config as config_module
 from flash_context.config import SettingsOverrides, load_settings
-from flash_context.types import ExplorerError
+from flash_context.types import SearchError
 
 FLASH_CONTEXT_ENV_KEYS = (
     "FLASH_CONTEXT_BASE_URL",
@@ -41,9 +41,14 @@ def test_config_defaults_include_latency_controls(
     settings = load_settings()
 
     assert settings.timeout_seconds == 120.0
-    assert settings.max_observation_chars == 6000
-    assert settings.max_read_lines == 120
-    assert settings.max_completion_tokens == 512
+    assert settings.max_turns == 12
+    assert settings.max_read_bytes == 48000
+    assert settings.max_grep_results == 100
+    assert settings.max_observation_chars == 24000
+    assert settings.max_read_lines == 480
+    assert settings.max_completion_tokens == 4096
+    assert settings.max_citation_lines == 240
+    assert settings.max_total_citation_lines == 1200
     assert settings.temperature == 0.0
     assert settings.max_parallel_tools == 4
 
@@ -89,7 +94,7 @@ model:
   max_completion_tokens: 300
   temperature: 0.3
 
-explorer:
+search:
   max_turns: 3
   ignore: ["vendor"]
 
@@ -214,7 +219,7 @@ def test_yaml_traj_dir_is_project_root_relative_from_external_cwd(
     caller.mkdir()
     (project_root / "config.yaml").write_text(
         """
-explorer:
+search:
   traj_dir: ".flash-context"
 """,
         encoding="utf-8",
@@ -235,7 +240,7 @@ def test_env_traj_dir_override_is_used_as_supplied(
     _clear_config_env(monkeypatch, project_root)
     (project_root / "config.yaml").write_text(
         """
-explorer:
+search:
   traj_dir: ".flash-context"
 """,
         encoding="utf-8",
@@ -297,7 +302,7 @@ def test_invalid_dotenv_line_raises_config_error(
     _clear_config_env(monkeypatch, tmp_path)
     (tmp_path / ".env").write_text("not-an-assignment\n", encoding="utf-8")
 
-    with pytest.raises(ExplorerError) as exc_info:
+    with pytest.raises(SearchError) as exc_info:
         load_settings()
 
     assert exc_info.value.code == "CONFIG_INVALID"
@@ -310,7 +315,7 @@ def test_invalid_integer_env_raises_config_error(
     _clear_config_env(monkeypatch, tmp_path)
     monkeypatch.setenv("FLASH_CONTEXT_MAX_TURNS", "nope")
 
-    with pytest.raises(ExplorerError) as exc_info:
+    with pytest.raises(SearchError) as exc_info:
         load_settings()
 
     assert exc_info.value.code == "CONFIG_INVALID"
@@ -323,7 +328,7 @@ def test_max_parallel_tools_must_be_positive(
     _clear_config_env(monkeypatch, tmp_path)
     monkeypatch.setenv("FLASH_CONTEXT_MAX_PARALLEL_TOOLS", "0")
 
-    with pytest.raises(ExplorerError) as exc_info:
+    with pytest.raises(SearchError) as exc_info:
         load_settings()
 
     assert exc_info.value.code == "CONFIG_INVALID"

@@ -15,9 +15,9 @@ from flash_context.llm import ChatClient
 from flash_context.types import (
     Citation,
     Diagnostic,
-    ExploreRequest,
-    ExploreResult,
     RawLocation,
+    SearchRequest,
+    SearchResult,
 )
 
 
@@ -45,11 +45,11 @@ def test_cli_text_output_is_citation_first(
     repo = tmp_path / "repo"
     repo.mkdir()
 
-    def fake_explore(request: ExploreRequest, settings: Settings) -> ExploreResult:
+    def fake_search(request: SearchRequest, settings: Settings) -> SearchResult:
         assert request.query == "Find validation"
         assert settings.max_turns == 12
         assert request.max_turns == 12
-        return ExploreResult(
+        return SearchResult(
             query=request.query,
             repo_root=str(repo),
             answer="src/api/validation.py:1-2\nValidation entrypoint.",
@@ -57,9 +57,9 @@ def test_cli_text_output_is_citation_first(
             turns_used=1,
         )
 
-    monkeypatch.setattr(cli, "explore", fake_explore)
+    monkeypatch.setattr(cli, "search", fake_search)
 
-    code = cli.main(["explore", "--query", "Find validation", "--repo", str(repo)])
+    code = cli.main(["search", "--query", "Find validation", "--repo", str(repo)])
 
     assert code == 0
     assert capsys.readouterr().out.splitlines()[0] == "src/api/validation.py:1-2"
@@ -73,8 +73,8 @@ def test_cli_json_output_shape(
     repo = tmp_path / "repo"
     repo.mkdir()
 
-    def fake_explore(request: ExploreRequest, settings: Settings) -> ExploreResult:
-        return ExploreResult(
+    def fake_search(request: SearchRequest, settings: Settings) -> SearchResult:
+        return SearchResult(
             query=request.query,
             repo_root=str(repo),
             answer="src/api/validation.py:1",
@@ -85,11 +85,11 @@ def test_cli_json_output_shape(
             turns_used=1,
         )
 
-    monkeypatch.setattr(cli, "explore", fake_explore)
+    monkeypatch.setattr(cli, "search", fake_search)
 
     code = cli.main(
         [
-            "explore",
+            "search",
             "--query",
             "Find validation",
             "--repo",
@@ -124,7 +124,7 @@ def test_cli_missing_endpoint_is_configuration_error(
     repo = tmp_path / "repo"
     repo.mkdir()
 
-    code = cli.main(["explore", "--query", "Find validation", "--repo", str(repo)])
+    code = cli.main(["search", "--query", "Find validation", "--repo", str(repo)])
 
     captured = capsys.readouterr()
     assert code == 3
@@ -151,10 +151,10 @@ model:
         encoding="utf-8",
     )
 
-    def fake_explore(request: ExploreRequest, settings: Settings) -> ExploreResult:
+    def fake_search(request: SearchRequest, settings: Settings) -> SearchResult:
         assert settings.base_url == "http://dotenv/v1"
         assert settings.model == "yaml-model"
-        return ExploreResult(
+        return SearchResult(
             query=request.query,
             repo_root=str(repo),
             answer="answer.py:1",
@@ -162,11 +162,11 @@ model:
             turns_used=1,
         )
 
-    monkeypatch.setattr(cli, "explore", fake_explore)
+    monkeypatch.setattr(cli, "search", fake_search)
 
     code = cli.main(
         [
-            "explore",
+            "search",
             "--query",
             "Find answer",
             "--repo",
@@ -182,7 +182,7 @@ def test_cli_rejects_config_option() -> None:
     with pytest.raises(SystemExit) as exc_info:
         cli.main(
             [
-                "explore",
+                "search",
                 "--query",
                 "Find answer",
                 "--repo",
@@ -204,13 +204,13 @@ def test_cli_exact_fast_path_text_without_endpoint(
         monkeypatch.delenv(key, raising=False)
     repo = tmp_path / "repo"
     repo.mkdir()
-    (repo / "agent.py").write_text("def explore():\n    pass\n", encoding="utf-8")
+    (repo / "agent.py").write_text("def search():\n    pass\n", encoding="utf-8")
 
     code = cli.main(
         [
-            "explore",
+            "search",
             "--query",
-            "Find `explore`",
+            "Find `search`",
             "--repo",
             str(repo),
         ]
@@ -229,13 +229,13 @@ def test_cli_exact_fast_path_json_reports_zero_turns(
         monkeypatch.delenv(key, raising=False)
     repo = tmp_path / "repo"
     repo.mkdir()
-    (repo / "agent.py").write_text("def explore():\n    pass\n", encoding="utf-8")
+    (repo / "agent.py").write_text("def search():\n    pass\n", encoding="utf-8")
 
     code = cli.main(
         [
-            "explore",
+            "search",
             "--query",
-            "Find `explore`",
+            "Find `search`",
             "--repo",
             str(repo),
             "--format",
@@ -277,7 +277,7 @@ def test_cli_reports_scan_exhaustion_without_losing_output(
     cited: bool,
     expected_code: int,
 ) -> None:
-    from flash_context.agent import explore
+    from flash_context.agent import search
 
     (tmp_path / "a.py").write_text("answer\n")
     (tmp_path / "b.py").write_text("other\n")
@@ -297,14 +297,14 @@ def test_cli_reports_scan_exhaustion_without_losing_output(
     )
     monkeypatch.setattr(cli, "load_settings", lambda **kwargs: settings)
 
-    def core(request: ExploreRequest, settings: Settings) -> ExploreResult:
-        return explore(request, settings, client=client)
+    def core(request: SearchRequest, settings: Settings) -> SearchResult:
+        return search(request, settings, client=client)
 
-    monkeypatch.setattr(cli, "explore", core)
+    monkeypatch.setattr(cli, "search", core)
     try:
         code = cli.main(
             [
-                "explore",
+                "search",
                 "--repo",
                 str(tmp_path),
                 "--query",
@@ -337,7 +337,7 @@ def test_cli_warns_for_bare_path_preview_truncation(
 ) -> None:
     (tmp_path / "a.py").write_text("a\nb\n")
     monkeypatch.setenv("FLASH_CONTEXT_MAX_READ_LINES", "1")
-    assert cli.main(["explore", "--repo", str(tmp_path), "--query", "a.py"]) == 0
+    assert cli.main(["search", "--repo", str(tmp_path), "--query", "a.py"]) == 0
     captured = capsys.readouterr()
     assert captured.out.strip() == "a.py:1"
     assert captured.err == "WARNING: Result truncated\n"
@@ -352,7 +352,7 @@ def test_cli_empty_tool_budget_failure_exits_six(
     output_format: str,
     failure: str,
 ) -> None:
-    from flash_context.agent import explore
+    from flash_context.agent import search
 
     (tmp_path / "a.py").write_text("padding\n" * 20)
     settings = Settings(base_url="http://test/v1", model="mock", max_scan_bytes=10)
@@ -402,14 +402,14 @@ def test_cli_empty_tool_budget_failure_exits_six(
     )
     monkeypatch.setattr(cli, "load_settings", lambda **kwargs: settings)
 
-    def core(request: ExploreRequest, settings: Settings) -> ExploreResult:
-        return explore(request, settings, client=client)
+    def core(request: SearchRequest, settings: Settings) -> SearchResult:
+        return search(request, settings, client=client)
 
-    monkeypatch.setattr(cli, "explore", core)
+    monkeypatch.setattr(cli, "search", core)
     try:
         code = cli.main(
             [
-                "explore",
+                "search",
                 "--repo",
                 str(tmp_path),
                 "--query",
@@ -446,8 +446,8 @@ def test_cli_documentation_fallback_keeps_evidence_and_warns(
 ) -> None:
     warning = "implementation source not verified; returning documentation evidence"
 
-    def fake_explore(request: ExploreRequest, settings: Settings) -> ExploreResult:
-        return ExploreResult(
+    def fake_search(request: SearchRequest, settings: Settings) -> SearchResult:
+        return SearchResult(
             query=request.query,
             repo_root=str(tmp_path),
             answer="guide.md:1",
@@ -458,10 +458,10 @@ def test_cli_documentation_fallback_keeps_evidence_and_warns(
             raw_locations=[RawLocation("guide.md", 1, 1, "Overview\n")],
         )
 
-    monkeypatch.setattr(cli, "explore", fake_explore)
+    monkeypatch.setattr(cli, "search", fake_search)
     code = cli.main(
         [
-            "explore",
+            "search",
             "--query",
             "Find handler implementation",
             "--repo",
@@ -489,7 +489,7 @@ def test_cli_missing_symbol_retains_empty_result_and_warning(
     capsys: pytest.CaptureFixture[str],
     output_format: str,
 ) -> None:
-    from flash_context.agent import explore
+    from flash_context.agent import search
 
     (tmp_path / "config.py").write_text("class Existing: pass\n")
     settings = Settings(base_url="http://test/v1", model="mock", max_turns=1)
@@ -500,14 +500,14 @@ def test_cli_missing_symbol_retains_empty_result_and_warning(
     )
     client = ChatClient(settings, transport=transport)
 
-    def core(request: ExploreRequest, unused_settings: Settings) -> ExploreResult:
-        return explore(request, settings, client=client)
+    def core(request: SearchRequest, unused_settings: Settings) -> SearchResult:
+        return search(request, settings, client=client)
 
-    monkeypatch.setattr(cli, "explore", core)
+    monkeypatch.setattr(cli, "search", core)
     try:
         code = cli.main(
             [
-                "explore",
+                "search",
                 "--repo",
                 str(tmp_path),
                 "--query",
@@ -538,8 +538,8 @@ def test_empty_parser_limited_result_exits_six(
     capsys: pytest.CaptureFixture[str],
     diagnostic: Diagnostic,
 ) -> None:
-    def core(request: ExploreRequest, settings: Settings) -> ExploreResult:
-        return ExploreResult(
+    def core(request: SearchRequest, settings: Settings) -> SearchResult:
+        return SearchResult(
             request.query,
             str(tmp_path),
             "NO_CITATIONS_FOUND",
@@ -549,9 +549,9 @@ def test_empty_parser_limited_result_exits_six(
             warnings=[diagnostic],
         )
 
-    monkeypatch.setattr(cli, "explore", core)
+    monkeypatch.setattr(cli, "search", core)
     assert (
-        cli.main(["explore", "--repo", str(tmp_path), "--query", "Where is behavior?"])
+        cli.main(["search", "--repo", str(tmp_path), "--query", "Where is behavior?"])
         == 6
     )
     assert str(diagnostic) in capsys.readouterr().err
@@ -560,17 +560,17 @@ def test_empty_parser_limited_result_exits_six(
 def test_no_citation_enables_prose(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    def core(request: ExploreRequest, settings: Settings) -> ExploreResult:
+    def core(request: SearchRequest, settings: Settings) -> SearchResult:
         assert not request.citation
-        return ExploreResult(
+        return SearchResult(
             request.query, str(tmp_path), "Found a.py:1", [Citation("a.py", 1, 1)], 1
         )
 
-    monkeypatch.setattr(cli, "explore", core)
+    monkeypatch.setattr(cli, "search", core)
     assert (
         cli.main(
             [
-                "explore",
+                "search",
                 "--repo",
                 str(tmp_path),
                 "--query",
