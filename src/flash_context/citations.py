@@ -105,14 +105,14 @@ class Source:
 @dataclass(slots=True)
 class Resolution:
     citations: list[Citation] = field(default_factory=list)
-    anchors: dict[str, Citation] = field(default_factory=dict)
+    anchors: dict[str, list[Citation]] = field(default_factory=dict)
     feedback: list[str] = field(default_factory=list)
     warnings: list[Diagnostic] = field(default_factory=list)
 
     def render(self, answer: str) -> str:
         return (
             ANCHOR.sub(
-                lambda m: self.anchors[m[0]].label() if m[0] in self.anchors else "",
+                lambda m: ", ".join(c.label() for c in self.anchors.get(m[0], [])),
                 answer,
             )
             .replace("<final_answer>", "")
@@ -337,6 +337,9 @@ class CitationResolver:
             raise AnchorRejected(
                 "No bounded syntax region contains the anchor; choose another line."
             )
+        return self._citation(path, source, region)
+
+    def _citation(self, path: str, source: Source, region: Region) -> Citation:
         count = region.end - region.start + 1
         if count > self.settings.max_citation_lines:
             raise AnchorRejected(
@@ -373,6 +376,49 @@ class CitationResolver:
             ),
         )
 
+    def _range(self, path: str, start: int, end: int) -> list[Citation]:
+        source = self.source(path)
+        if not 1 <= start <= end <= len(source.lines):
+            raise AnchorRejected("Range bounds must be ordered and within the file.")
+        if source.regions is None:
+            raise AnchorRejected(
+                "Range has no parsed boundaries; choose a line anchor."
+            )
+        bounded = [
+            r
+            for r in source.regions
+            if r.end - r.start + 1 <= self.settings.max_citation_lines
+        ]
+        contained = [r for r in bounded if start <= r.start and r.end <= end]
+        candidates = [r for r in contained if r.kind == "definition"]
+        if not candidates:
+            enclosing = [r for r in bounded if r.start <= start and end <= r.end]
+            if enclosing:
+                definitions = [r for r in enclosing if r.kind == "definition"]
+                candidates = [
+                    min(definitions or enclosing, key=lambda r: r.end - r.start)
+                ]
+            else:
+                candidates = contained
+        # Prefer complete outer units, retaining separate adjacent definitions.
+        ordered = sorted(candidates, key=lambda r: (r.start, -r.end))
+        regions: list[Region] = []
+        for region in ordered:
+            if not regions or region.end > regions[-1].end:
+                regions.append(region)
+        citations = []
+        for region in regions:
+            try:
+                citations.append(self._citation(path, source, region))
+            except AnchorRejected:
+                # Exact queries can only select units containing the whole token.
+                continue
+        if not citations:
+            raise AnchorRejected(
+                "No bounded verified syntax units; choose a line anchor."
+            )
+        return citations
+
     def parse(self, content: str) -> Resolution:
         result = Resolution()
         for index, match in enumerate(ANCHOR.finditer(content)):
@@ -381,35 +427,47 @@ class CitationResolver:
                     raise AnchorRejected(
                         f"At most {MAX_ANCHORS} anchor candidates can be verified."
                     )
-                if match["range"]:
-                    raise AnchorRejected(
-                        "Model ranges are unsupported; name symbols or individual "
-                        "line anchors."
+                candidates = (
+                    self._range(
+                        match["path"], int(match["line"]), int(match["range"][1:])
                     )
-                citation = self._resolve(
-                    match["path"],
-                    symbol=match["symbol"],
-                    line=int(match["line"]) if match["line"] else None,
-                )
-                if citation not in result.citations:
-                    coverage = {
-                        (c.path, n)
-                        for c in [*result.citations, citation]
-                        for n in range(c.start_line, c.end_line + 1)
-                    }
-                    if (
-                        len(result.citations) >= MAX_CITATIONS
-                        or len(coverage) > self.settings.max_total_citation_lines
-                    ):
-                        raise AnchorRejected(
-                            f"Answer exceeds {MAX_CITATIONS} citations or "
-                            f"{self.settings.max_total_citation_lines} total lines; "
-                            "select fewer anchors."
+                    if match["range"]
+                    else [
+                        self._resolve(
+                            match["path"],
+                            symbol=match["symbol"],
+                            line=int(match["line"]) if match["line"] else None,
                         )
-                    result.citations.append(citation)
-                result.anchors[match[0]] = citation
+                    ]
+                )
+                combined = list(dict.fromkeys([*result.citations, *candidates]))
+                coverage = {
+                    (c.path, n)
+                    for c in combined
+                    for n in range(c.start_line, c.end_line + 1)
+                }
+                if (
+                    len(combined) > MAX_CITATIONS
+                    or len(coverage) > self.settings.max_total_citation_lines
+                ):
+                    example = candidates[0]
+                    raise AnchorRejected(
+                        f"Answer exceeds {MAX_CITATIONS} citations or "
+                        f"{self.settings.max_total_citation_lines} total lines; "
+                        "select fewer anchors. Example of a narrower selection: "
+                        f"<final_answer>\n{example.path}:{example.start_line}\n</final_answer>"
+                    )
+                result.citations = combined
+                result.anchors[match[0]] = candidates
             except AnchorRejected as exc:
-                result.feedback.append(str(exc))
+                feedback = str(exc)
+                if "Example" not in feedback:
+                    feedback += (
+                        " Example format: <final_answer>\nsrc/example.py:42\n"
+                        "</final_answer>. "
+                        "Use an actual path and line from the observations."
+                    )
+                result.feedback.append(feedback)
             if index >= MAX_ANCHORS:
                 break
         paths = dict.fromkeys(m["path"] for m in ANCHOR.finditer(content))

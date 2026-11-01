@@ -37,11 +37,11 @@ class ChatClient:
         payload: JsonObject = {
             "model": self._settings.model,
             "messages": messages,
-            "tools": tools,
-            "tool_choice": "auto",
             "max_tokens": self._settings.max_completion_tokens,
             "temperature": self._settings.temperature,
         }
+        if tools:
+            payload.update(tools=tools, tool_choice="auto")
         try:
             response = self._client.post(url, headers=headers, json=payload)
             response.raise_for_status()

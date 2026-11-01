@@ -108,6 +108,7 @@ def test_repeated_read_does_not_promote_unselected_evidence(tmp_path: Path) -> N
         [
             _tool_response("call_1", "read_file", repeated_call),
             _tool_response("call_2", "read_file", repeated_call),
+            _message_response("NO_CITATIONS_FOUND"),
         ]
     )
     settings = Settings(base_url="http://test/v1", model="test-model", max_turns=6)
@@ -119,7 +120,7 @@ def test_repeated_read_does_not_promote_unselected_evidence(tmp_path: Path) -> N
         client=client,
     )
 
-    assert result.turns_used == 2
+    assert result.turns_used == 3
     assert result.citations == []
     assert "repeated tool call stopped exploration" in result.warnings
 
@@ -286,6 +287,7 @@ def test_final_prose_does_not_promote_unselected_reads(tmp_path: Path) -> None:
                     "end_line": 365,
                 },
             ),
+            _message_response("The helper is at line 352."),
             _message_response("The helper is at line 352."),
         ]
     )

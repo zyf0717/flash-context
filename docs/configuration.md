@@ -61,7 +61,7 @@ The [example YAML](../config.yaml.example) and
 | `FLASH_CONTEXT_TOOL_TIMEOUT_SECONDS` | `5` | Scan, regex, and parser deadline |
 | `FLASH_CONTEXT_MAX_TOOL_CALLS_PER_TURN` | `16` | Maximum model tool batch size |
 | `FLASH_CONTEXT_MAX_CITATION_LINES` | `120` | Lines per model citation |
-| `FLASH_CONTEXT_MAX_TOTAL_CITATION_LINES` | `240` | Unique model-cited file-lines |
+| `FLASH_CONTEXT_MAX_TOTAL_CITATION_LINES` | `600` | Unique model-cited file-lines |
 | `FLASH_CONTEXT_MAX_PARSE_BYTES` | `1048576` | Parser input bytes per file |
 
 YAML uses the same names in snake_case: endpoint settings under `model`,

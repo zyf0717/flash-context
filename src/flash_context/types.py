@@ -6,7 +6,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, Literal
 
-MAX_CITATIONS = 12
+MAX_CITATIONS = 16
 MAX_ANCHORS = 16
 ToolName = Literal["read_file", "repo_glob", "repo_grep"]
 

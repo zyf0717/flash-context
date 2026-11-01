@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from flash_context.types import (
@@ -36,6 +37,24 @@ class TrajectoryRecorder:
             },
             "turns": self._turns,
         }
+
+    def record_request(
+        self,
+        turn: int,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        *,
+        selecting: bool,
+    ) -> None:
+        if self._traj_dir is not None:
+            self._turns.append(
+                {
+                    "turn": turn,
+                    "phase": "selection" if selecting else "discovery",
+                    "message_roles": [m["role"] for m in messages],
+                    "tool_count": len(tools),
+                }
+            )
 
     def record_model_turn(self, turn: int, message: dict[str, object]) -> None:
         if self._traj_dir is not None:
@@ -71,6 +90,8 @@ class TrajectoryRecorder:
         if self._traj_dir is None:
             return
         self._data["error"] = error.code if error else None
+        if error and isinstance(error.details.get("status_code"), int):
+            self._data["status_code"] = error.details["status_code"]
         self._data["result"] = (
             {
                 "turns_used": result.turns_used,
