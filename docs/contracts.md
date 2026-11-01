@@ -77,7 +77,7 @@ out, and successfully parsed input. Input caps and parser deadlines emit explici
 incomplete-result diagnostics. Symbols require parsed definitions. Grammars are
 bundled and never downloaded during search.
 
-Defaults: 120 lines per model citation, 600 unique file-lines total, 16 citations,
+Defaults: 240 lines per model citation, 1200 unique file-lines total, 16 citations,
 16 candidate anchors, 1 MiB parser input per file. Cumulative parser input obeys
 `max_scan_bytes`; parsing/traversal obey tool deadlines. Explicit user ranges,
 previews, and deterministic local lookups retain read byte caps and are exempt

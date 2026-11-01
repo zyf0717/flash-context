@@ -184,6 +184,42 @@ def test_model_observation_content_is_capped_for_endpoint_payload(
     assert observation["truncated"] is True
 
 
+def test_default_budgets_preserve_larger_source_context(tmp_path: Path) -> None:
+    source = (
+        "def calculate():\n"
+        + "".join(f"    value_{i} = {i}  # {'context ' * 8}\n" for i in range(198))
+        + "    return value_197\n"
+    )
+    (tmp_path / "calculation.py").write_text(source, encoding="utf-8")
+    responses = iter(
+        [
+            _tool_response("grep", "repo_grep", {"pattern": "def calculate"}),
+            _tool_response("read", "read_file", {"path": "calculation.py"}),
+            _message_response("calculation.py#calculate"),
+        ]
+    )
+    payloads: list[dict[str, object]] = []
+    settings = Settings(base_url="http://test/v1", model="test-model")
+    client = ChatClient(settings, transport=_mock_transport(responses, payloads))
+    try:
+        result = search(
+            SearchRequest("Find the calculation implementation", tmp_path),
+            settings,
+            client=client,
+        )
+    finally:
+        client.close()
+
+    observation = _last_tool_payload(payloads)
+    assert observation["line_range"] == "1-200"
+    assert "200:     return value_197\n" in str(observation["content"])
+    assert observation["truncated"] is False
+    assert all(payload["max_tokens"] == 4096 for payload in payloads)
+    assert result.answer == "calculation.py:1-200"
+    assert result.raw_locations[0].text == source
+    assert not result.truncated
+
+
 def test_same_turn_tool_calls_execute_concurrently_and_preserve_order(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

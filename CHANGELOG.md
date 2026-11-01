@@ -13,6 +13,11 @@ User-visible changes and migration instructions for each release.
 - Rename the CLI command to `search`, the MCP tool to `search_repository`, and
   the shared Python API and YAML section to use search terminology. Remove the
   previous names without compatibility aliases.
+- Increase default context budgets: reads from 120 to 480 lines and 12,000 to
+  48,000 bytes, observations from 6,000 to 24,000 characters, grep results from
+  50 to 100, and completion tokens from 512 to 4,096 per model response.
+  Increase citation limits from 120 to 240 lines per citation and 600 to 1,200
+  unique lines total. The default remains twelve turns.
 
 ### Migration
 
@@ -25,6 +30,9 @@ User-visible changes and migration instructions for each release.
   `ExplorerError` respectively.
 - Rename the `explorer` section in source-checkout `config.yaml` files to `search`.
   Environment variable names, request fields, and result schemas are unchanged.
+- Explicit budget settings still take precedence. Update existing YAML or
+  environment overrides to use the larger defaults; lower values remain valid
+  for smaller model context windows.
 
 ## [0.4.2] - 2026-11-01
 

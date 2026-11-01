@@ -79,7 +79,7 @@ def test_httpx_redirects() -> None:
 
 def test_large_definition_line_and_header(tmp_path: Path) -> None:
     (tmp_path / "a.py").write_text("def large():\n" + "    x = 1\n" * 130)
-    resolver = CitationResolver(tmp_path, Settings(), None)
+    resolver = CitationResolver(tmp_path, Settings(max_citation_lines=120), None)
     assert _citation(resolver, "a.py", symbol="large") is None
     assert _citation(resolver, "a.py", line=70).label() == "a.py:70"  # type: ignore[union-attr]
     assert _citation(resolver, "a.py", line=1).end_line == 1  # type: ignore[union-attr]

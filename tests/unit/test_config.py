@@ -41,9 +41,14 @@ def test_config_defaults_include_latency_controls(
     settings = load_settings()
 
     assert settings.timeout_seconds == 120.0
-    assert settings.max_observation_chars == 6000
-    assert settings.max_read_lines == 120
-    assert settings.max_completion_tokens == 512
+    assert settings.max_turns == 12
+    assert settings.max_read_bytes == 48000
+    assert settings.max_grep_results == 100
+    assert settings.max_observation_chars == 24000
+    assert settings.max_read_lines == 480
+    assert settings.max_completion_tokens == 4096
+    assert settings.max_citation_lines == 240
+    assert settings.max_total_citation_lines == 1200
     assert settings.temperature == 0.0
     assert settings.max_parallel_tools == 4
 

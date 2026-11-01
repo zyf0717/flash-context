@@ -28,17 +28,17 @@ class Settings:
     model: str = ""
     api_key: str | None = None
     max_turns: int = 12
-    max_citation_lines: int = 120
-    max_total_citation_lines: int = 600
+    max_citation_lines: int = 240
+    max_total_citation_lines: int = 1_200
     max_parse_bytes: int = 1_048_576
-    max_read_bytes: int = 12_000
-    max_grep_results: int = 50
+    max_read_bytes: int = 48_000
+    max_grep_results: int = 100
     traj_dir: Path | None = None
     ignore: list[str] = field(default_factory=list)
     timeout_seconds: float = 120.0
-    max_observation_chars: int = 6_000
-    max_read_lines: int = 120
-    max_completion_tokens: int = 512
+    max_observation_chars: int = 24_000
+    max_read_lines: int = 480
+    max_completion_tokens: int = 4_096
     temperature: float = 0.0
     max_parallel_tools: int = 4
 
