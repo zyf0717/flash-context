@@ -173,7 +173,31 @@ class PathSafety:
             except OSError:
                 budget.warnings.append("search skipped an unreadable directory")
 
-        yield from walk(self.repo_root)
+        directory = self.repo_root
+        parts = Path(pattern).parts
+        try:
+            for index, part in enumerate(parts):
+                if any(char in part for char in "*?["):
+                    break
+                candidate = directory / part
+                budget.consume(entries=1)
+                self.ensure_allowed(candidate)
+                if index == len(parts) - 1:
+                    if candidate.exists() and not candidate.is_dir():
+                        yield self.resolve_existing_file(candidate)
+                    return
+                # Match the walker's policy: never traverse directory symlinks.
+                if candidate.is_symlink() or not candidate.is_dir():
+                    return
+                directory = candidate
+            yield from walk(directory)
+        except ExplorerError as exc:
+            if exc.code == "TOOL_LIMIT_EXCEEDED":
+                raise
+            if exc.code not in {"PATH_DENIED", "PATH_OUTSIDE_ROOT"}:
+                budget.warnings.append("search skipped an unreadable entry")
+        except OSError:
+            budget.warnings.append("search skipped an unreadable directory")
 
 
 def _matches_patterns(rel_path: str, patterns: tuple[str, ...]) -> bool:

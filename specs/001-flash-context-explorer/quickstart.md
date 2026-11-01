@@ -128,6 +128,17 @@ uv run flash-context explore \
   --format json
 ```
 
+## Local lookups and diagnostics
+
+Bare-path lookups such as `--query 'src/flash_context/agent.py'` return bounded
+previews locally. Exact citations and unique Python definitions can also finish
+without endpoint configuration; these results report `turns_used: 0`.
+
+Warnings appear on stderr in both CLI formats. If no citations are found after
+a scan budget or tool processing deadline is exhausted, the command exits 6
+while preserving stdout. Partial cited results and complete empty searches exit
+0. See [large-repository tuning](../../docs/configuration.md#large-repositories).
+
 ## Run MCP Adapter
 
 Use MCP when an MCP-capable editor or agent should call repository exploration

@@ -60,6 +60,13 @@ def create_server() -> Any:
         max_turns: int | None = None,
         citation: bool | None = None,
     ) -> dict[str, object]:
+        """Find code or local text relevant to a focused repository question.
+
+        Explore read-only when implementation locations or supporting evidence
+        are unknown. Return validated file-line citations and bounded source
+        snippets, with warnings for incomplete exploration. repo_root defaults
+        to the server's working directory.
+        """
         return explore_repository_handler(
             query=query,
             repo_root=repo_root,

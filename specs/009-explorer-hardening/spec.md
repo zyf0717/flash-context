@@ -24,6 +24,17 @@ This spec refines specs 002–007 while retaining CLI-first shared-core explorat
 
 ## Correctness
 
+- Literal file search patterns bypass tree enumeration. Scoped wildcard searches
+  start at the longest literal directory prefix, preserving budgeted ancestor
+  checks, deny/ignore pruning, directory-symlink exclusion, and root containment.
+- Initial file-sample scan failures propagate warnings and truncation into shared
+  results; normal sample result caps do not count as search failure.
+- CLI results print warnings on stderr in text and JSON modes; otherwise
+  unexplained truncation emits a generic warning. Empty results after scan-budget
+  exhaustion or processing timeouts exit 6 with stdout intact. Partial cited
+  results and complete empty searches exit 0. Default limits are unchanged.
+- Trajectory tool entries use only the relevant counter: read `content_length`,
+  grep `hit_count`, or glob `match_count`, without persisting their text.
 - Recognize only conservative exact lookup forms for preflight. Multiple
   targets/files, callers/usages, and unexplained intent use the model loop.
 - Narrow-read early termination applies only to exact lookups when every
@@ -37,6 +48,10 @@ This spec refines specs 002–007 while retaining CLI-first shared-core explorat
 - Map file access failures to PATH_UNREADABLE. Searches can continue over other
   files with warnings and truncation. Unreachable read ranges due to scan limits
   use TOOL_LIMIT_EXCEEDED rather than claiming EOF.
+- Citation validation proves safe, existing line coverage, not semantic relevance
+  or minimality. Prompt guidance prefers implementation source for implementation
+  questions and small supporting ranges, using docs when requested or necessary.
+  No refinement call or syntax parsing is added; explicit ranges remain intact.
 
 ## Validation
 

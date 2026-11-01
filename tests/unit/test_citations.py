@@ -46,13 +46,13 @@ def test_extract_markdown_file_lines_citation() -> None:
 def test_merge_adjacent_citations_merges_overlapping_and_adjacent_ranges() -> None:
     citations = _merge_adjacent_citations(
         [
-            Citation("a.py", 7, 10, reason="third"),
-            Citation("a.py", 1, 3, reason=None),
-            Citation("a.py", 4, 8, reason="first"),
+            Citation("a.py", 7, 10),
+            Citation("a.py", 1, 3),
+            Citation("a.py", 4, 8),
         ]
     )
 
-    assert citations == [Citation("a.py", 1, 10, reason="third")]
+    assert citations == [Citation("a.py", 1, 10)]
 
 
 def test_merge_adjacent_citations_keeps_disjoint_and_cross_file_ranges() -> None:

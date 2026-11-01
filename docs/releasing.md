@@ -14,8 +14,9 @@ tests → build/check/install → TestPyPI → TestPyPI install check
 
 Each stage requires its predecessor to succeed. Both registries receive the
 same wheel and source distribution. Index checks install the exact tagged
-version, exercise endpoint-free CLI exploration and real MCP tool discovery,
-and retry index installation up to six times with ten seconds between attempts.
+version and exercise endpoint-free CLI exploration (citations, bare paths, and
+reference-heavy unique symbols) plus real MCP discovery and its tool description.
+Index installation is retried up to six times with ten seconds between attempts.
 Each retry refreshes cached `flash-context` metadata so an initial index miss
 does not persist for the entire retry loop.
 TestPyPI supplies only `flash-context`; its dependencies come from PyPI.

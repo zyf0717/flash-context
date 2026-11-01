@@ -50,16 +50,19 @@ class TrajectoryRecorder:
         self, turn: int, tool_name: str, observation: ToolObservation
     ) -> None:
         if self._traj_dir is not None:
-            self._turns.append(
-                {
-                    "turn": turn,
-                    "tool": tool_name,
-                    "ok": observation.ok,
-                    "truncated": observation.truncated,
-                    "hit_count": len(observation.hits),
-                    "content_length": len(observation.content or ""),
-                }
-            )
+            metadata: dict[str, object] = {
+                "turn": turn,
+                "tool": tool_name,
+                "ok": observation.ok,
+                "truncated": observation.truncated,
+            }
+            if tool_name == "read_file":
+                metadata["content_length"] = len(observation.content or "")
+            elif tool_name == "repo_grep":
+                metadata["hit_count"] = len(observation.hits)
+            elif tool_name == "repo_glob":
+                metadata["match_count"] = len(observation.matches)
+            self._turns.append(metadata)
 
     def finish(
         self, *, result: ExploreResult | None = None, error: ExplorerError | None = None

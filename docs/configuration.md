@@ -11,6 +11,10 @@ export FLASH_CONTEXT_MODEL=your-model
 The endpoint must support OpenAI-compatible chat completions and tool calls.
 Exact path or uniquely defined symbol queries can complete locally without an
 endpoint when the controller can validate the citation deterministically.
+Bare paths, optionally quoted, return previews bounded by
+`FLASH_CONTEXT_MAX_READ_BYTES` and `FLASH_CONTEXT_MAX_READ_LINES`. Symbol lookups
+count definitions rather than references, and require complete, unambiguous
+Python source/stub coverage within the scan limits.
 
 Installed commands do not discover YAML or `.env` files in the installation
 directory, working directory, or target repository.
@@ -86,7 +90,35 @@ warnings; a read that cannot reach its starting line returns `TOOL_LIMIT_EXCEEDE
 Grep uses regex compatibility mode, accepts patterns up to 4096 characters, and
 skips lines over 64 KiB with a warning. Directory symlinks are not traversed;
 file symlinks are checked at both requested and resolved paths and deduplicated.
+Literal search paths are resolved directly, and scoped globs start at their
+literal directory prefix, so unrelated trees do not consume their scan budgets.
 Deadlines bound processing and matching, but cannot interrupt stalled kernel I/O.
+
+The CLI prints result warnings to stderr for both text and JSON output, or a
+generic warning for truncation without a more specific diagnostic. If no
+citations are found after scan-byte/entry budget exhaustion or a tool processing
+timeout, it exits 6 while preserving the result on stdout. Partial cited results
+and complete empty searches exit 0. JSON and MCP retain `truncated` and `warnings`;
+MCP returns the shared result without CLI exit semantics. A capped initial file
+sample is normal; actual sample scan failures propagate into the result.
+
+### Large repositories
+
+Start with focused queries naming the source directory when known. For a larger
+tree that exhausts the defaults, explicitly increase budgets, for example:
+
+```bash
+FLASH_CONTEXT_MAX_SCAN_ENTRIES=100000 \
+FLASH_CONTEXT_MAX_SCAN_BYTES=100000000 \
+FLASH_CONTEXT_TOOL_TIMEOUT_SECONDS=20 \
+flash-context explore --repo /path/to/repo \
+  --query "Find the recursive dependency resolution implementation"
+```
+
+These are opt-in values, not automatic scaling. They allow more local work per
+tool and can increase latency; inspect the warnings before increasing them.
+
+### Trajectory logs
 
 Trajectory logging is disabled by default. A configured directory must resolve
 outside the selected repository, otherwise exploration returns `CONFIG_INVALID`.
@@ -96,3 +128,6 @@ YAML null and an explicit `SettingsOverrides(traj_dir=None)` also disable loggin
 Logs contain structural counts and error codes, never queries, model prose,
 arguments, search text, source snippets, or raw exception details. Logging write
 failures become result warnings. Existing log files are left untouched.
+Tool entries use `content_length` for read content, `hit_count` for grep hits,
+and `match_count` for glob paths. Irrelevant counters are omitted, so a grep
+result is not described as empty read content.

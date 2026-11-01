@@ -16,8 +16,8 @@ returned only in `raw_locations`.
 - Adjacent means `next.start_line <= current.end_line + 1`.
 - Merging MUST group by path and preserve path group order by first appearance
   in the validated citation list.
-- Merged citation `reason` MUST be the first non-empty reason from citations in
-  the merged group, based on original citation order.
+- Citations contain only `path`, `start_line`, and `end_line`; the unused
+  `reason` field has been removed.
 - `answer` in citation mode MUST be rendered from merged citations.
 - `raw_locations` MUST be extracted by reading merged citation ranges with the
   existing root-scoped read-only file tool path.
@@ -37,8 +37,7 @@ returned only in `raw_locations`.
     {
       "path": "src/api/validation.py",
       "start_line": 42,
-      "end_line": 88,
-      "reason": null
+      "end_line": 88
     }
   ],
   "raw_locations": [

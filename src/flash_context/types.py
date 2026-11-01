@@ -49,14 +49,12 @@ class Citation:
     path: str
     start_line: int | None = None
     end_line: int | None = None
-    reason: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
             "path": self.path,
             "start_line": self.start_line,
             "end_line": self.end_line,
-            "reason": self.reason,
         }
 
     def label(self) -> str:
