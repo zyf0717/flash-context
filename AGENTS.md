@@ -35,7 +35,7 @@ CLI / MCP adapter
 shared exploration core
         |
         v
-OpenAI-compatible FastContext-style endpoint
+OpenAI-compatible endpoint
         |
         v
 root-scoped local read-only tools
@@ -175,7 +175,7 @@ Required areas of coverage include:
 * MCP schema and delegation to the shared core
 * fixture repository integration with cited file-line evidence
 
-Automated tests must not require a real external FastContext service.
+Automated tests must not require a real external model endpoint.
 
 Release-check commands and tool choices should be documented consistently in
 the project docs and CI configuration.

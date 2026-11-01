@@ -189,7 +189,7 @@ def test_current_repo_multi_prompt_timing_e2e() -> None:
     try:
         settings.require_endpoint()
     except ExplorerError as exc:
-        pytest.skip(f"FastContext endpoint config missing: {exc.code}")
+        pytest.skip(f"Model endpoint config missing: {exc.code}")
 
     timings: list[tuple[PromptCase, float, str, int, list[str]]] = []
     total_start = perf_counter()
@@ -288,7 +288,7 @@ def test_current_repo_mixed_edge_case_timing_e2e() -> None:
     try:
         settings.require_endpoint()
     except ExplorerError as exc:
-        pytest.skip(f"FastContext endpoint config missing: {exc.code}")
+        pytest.skip(f"Model endpoint config missing: {exc.code}")
 
     timings: list[tuple[MixedPromptCase, float, str, int, list[str]]] = []
     total_start = perf_counter()

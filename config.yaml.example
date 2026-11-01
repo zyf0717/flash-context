@@ -8,7 +8,7 @@ explorer:
     - "dist"
     - "build"
   # Relative paths resolve from the flash-context project root.
-  traj_dir: ".flash-context"
+  traj_dir: null
 
 model:
   base_url: "http://100.105.153.85:1234/v1"
@@ -24,3 +24,7 @@ tools:
   max_observation_chars: 6000
   max_read_lines: 120
   max_parallel_tools: 4
+  max_scan_bytes: 16777216
+  max_scan_entries: 10000
+  tool_timeout_seconds: 5
+  max_tool_calls_per_turn: 16

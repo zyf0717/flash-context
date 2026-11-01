@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from importlib import import_module
 from pathlib import Path
 from typing import Any
@@ -28,22 +29,7 @@ def explore_repository_handler(
             overrides=SettingsOverrides(max_turns=max_turns),
         )
         if max_turns is not None and settings is not None:
-            effective_settings = Settings(
-                base_url=settings.base_url,
-                model=settings.model,
-                api_key=settings.api_key,
-                max_turns=max_turns,
-                max_read_bytes=settings.max_read_bytes,
-                max_grep_results=settings.max_grep_results,
-                traj_dir=settings.traj_dir,
-                ignore=settings.ignore,
-                timeout_seconds=settings.timeout_seconds,
-                max_observation_chars=settings.max_observation_chars,
-                max_read_lines=settings.max_read_lines,
-                max_completion_tokens=settings.max_completion_tokens,
-                temperature=settings.temperature,
-                max_parallel_tools=settings.max_parallel_tools,
-            )
+            effective_settings = replace(settings, max_turns=max_turns)
         request = ExploreRequest(
             query=query,
             repo_root=root,

@@ -71,3 +71,6 @@ the server's working directory. Results contain validated citations and raw
 source snippets, or a structured error. See the
 [MCP contract](../specs/001-flash-context-explorer/contracts/mcp.md) for schemas
 and delegation behavior.
+
+Scan limits, incomplete-result warnings, and metadata-only external logging use
+the same [configuration](configuration.md) and core behavior as the CLI.

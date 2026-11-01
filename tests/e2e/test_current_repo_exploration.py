@@ -30,7 +30,7 @@ def test_current_repo_e2e_returns_controller_validated_citation() -> None:
     try:
         settings.require_endpoint()
     except ExplorerError as exc:
-        pytest.skip(f"FastContext endpoint config missing: {exc.code}")
+        pytest.skip(f"Model endpoint config missing: {exc.code}")
 
     result = explore(
         ExploreRequest(

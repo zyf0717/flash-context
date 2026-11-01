@@ -99,3 +99,14 @@ The following MCP-first tools are intentionally out of scope for the MVP:
 
 They assume a ranked context endpoint contract rather than the selected
 FastContext-style exploration harness.
+
+## Hardening behavior
+
+The [hardening spec](../../009-explorer-hardening/spec.md) applies through the
+shared core. Result shape is unchanged. Token-limited completions return usable
+evidence with `truncated: true` and a warning, or `ENDPOINT_BAD_RESPONSE` when no
+evidence exists. Empty completions without tool calls are endpoint errors.
+In-root trajectory destinations are configuration errors. `PATH_UNREADABLE`
+identifies filesystem access failures; tool budget failures use
+`TOOL_LIMIT_EXCEEDED`. CLI exit categories remain configuration 3, path 4,
+endpoint 5, and other exploration errors 6.

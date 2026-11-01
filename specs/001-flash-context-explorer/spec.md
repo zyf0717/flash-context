@@ -23,7 +23,7 @@ verify the answer cites relevant files and line ranges without modifying files.
 
 Acceptance Scenarios:
 
-1. Given a local repository and configured FastContext-compatible endpoint, When
+1. Given a local repository and configured OpenAI-compatible endpoint, When
    the user runs `flash-context explore --query "Find validation logic" --repo .
    --max-turns 6 --citation`, Then the command returns cited repository paths
    and line ranges.

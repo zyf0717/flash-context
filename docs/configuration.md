@@ -67,3 +67,32 @@ reduce latency variance.
 See [spec 006](../specs/006-project-root-yaml-dotenv-config/spec.md) for the
 configuration contract and [CLI contract](../specs/001-flash-context-explorer/contracts/cli.md)
 for options and error codes.
+
+## Local execution budgets and diagnostics
+
+Tool settings also accept these environment variables (and matching snake_case
+keys under YAML `tools`, with the existing precedence):
+
+| Environment variable | Default | Purpose |
+| --- | --- | --- |
+| `FLASH_CONTEXT_MAX_SCAN_BYTES` | `16777216` | Bytes scanned per tool, including skipped lines |
+| `FLASH_CONTEXT_MAX_SCAN_ENTRIES` | `10000` | Directory entries examined per tool |
+| `FLASH_CONTEXT_TOOL_TIMEOUT_SECONDS` | `5` | Cooperative scan deadline and regex match timeout |
+| `FLASH_CONTEXT_MAX_TOOL_CALLS_PER_TURN` | `16` | Maximum model tool batch size |
+
+Limits apply to preflight, model tools, citation verification, and snippet
+extraction. Budget exhaustion returns partial observations with truncation and
+warnings; a read that cannot reach its starting line returns `TOOL_LIMIT_EXCEEDED`.
+Grep uses regex compatibility mode, accepts patterns up to 4096 characters, and
+skips lines over 64 KiB with a warning. Directory symlinks are not traversed;
+file symlinks are checked at both requested and resolved paths and deduplicated.
+Deadlines bound processing and matching, but cannot interrupt stalled kernel I/O.
+
+Trajectory logging is disabled by default. A configured directory must resolve
+outside the selected repository, otherwise exploration returns `CONFIG_INVALID`.
+Existing configurations using `.flash-context` inside the target must move the
+logs or disable them: `FLASH_CONTEXT_TRAJ_DIR=` overrides an inherited directory.
+YAML null and an explicit `SettingsOverrides(traj_dir=None)` also disable logging.
+Logs contain structural counts and error codes, never queries, model prose,
+arguments, search text, source snippets, or raw exception details. Logging write
+failures become result warnings. Existing log files are left untouched.

@@ -52,7 +52,7 @@ Set the version in `pyproject.toml` and refresh `uv.lock`; `uv version` does
 both. Runtime `flash_context.__version__` reads the installed metadata.
 
 ```bash
-uv version 0.1.1
+uv version 0.2.0
 uv sync --locked --extra mcp
 uv run --locked ruff check .
 uv run --locked mypy
@@ -67,8 +67,8 @@ merged into `main`, update your local checkout and push the matching tag:
 ```bash
 git switch main
 git pull --ff-only
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 The tag must exactly match `v` plus the project version (including prerelease

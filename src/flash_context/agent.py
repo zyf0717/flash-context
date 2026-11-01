@@ -9,7 +9,7 @@ from typing import Any, Literal, cast
 
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
-from flash_context.logging import TrajectoryRecorder
+from flash_context.logging import TrajectoryRecorder, validate_trajectory_dir
 from flash_context.tools import read_file, repo_glob, repo_grep
 from flash_context.types import (
     Citation,
@@ -57,16 +57,9 @@ MARKDOWN_FILE_LINES_RE = re.compile(
 EXPLICIT_PATH_RE = re.compile(
     r"`?(?P<path>(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+)`?"
 )
-BACKTICK_OR_QUOTE_RE = re.compile(
-    r"[`'\"](?P<token>[A-Za-z_][A-Za-z0-9_]*)[`'\"]"
-)
+BACKTICK_OR_QUOTE_RE = re.compile(r"[`'\"](?P<token>[A-Za-z_][A-Za-z0-9_]*)[`'\"]")
 EXACT_TEXT_RE = re.compile(r"[`'\"](?P<target>[^`'\"]{1,120})[`'\"]")
 TOKEN_RE = re.compile(r"\b(?P<token>[A-Za-z_][A-Za-z0-9_]*)\b")
-SEMANTIC_QUERY_RE = re.compile(
-    r"\b(why|how|compare|comparison|synthesize|interpret|explain|behavior|"
-    r"behaviour|architecture|owner|ownership|relationship|tradeoff|flow)\b",
-    re.IGNORECASE,
-)
 
 
 @dataclass(slots=True)
@@ -74,7 +67,6 @@ class EvidenceState:
     reads: list[ToolObservation] = field(default_factory=list)
     citations: list[Citation] = field(default_factory=list)
     seen_tool_calls: set[str] = field(default_factory=set)
-    repeated_tool_calls: int = 0
 
 
 def explore(
@@ -85,6 +77,7 @@ def explore(
 ) -> ExploreResult:
     request.validate()
     repo_root = request.repo_root.resolve()
+    validate_trajectory_dir(settings.traj_dir, repo_root)
     fast_result = _try_exact_fast_path(
         request,
         repo_root=repo_root,
@@ -102,6 +95,7 @@ def explore(
         pattern="**/*",
         max_results=settings.max_grep_results,
         ignore=settings.ignore,
+        limits=settings.limits,
     )
     messages = _initial_messages(request, file_sample, settings)
     tools = tool_schemas()
@@ -114,6 +108,41 @@ def explore(
         for turn in range(1, effective_max_turns + 1):
             response = chat_client.chat_completion(messages=messages, tools=tools)
             message = _extract_message(response)
+            raw_calls = message.get("tool_calls")
+            if (
+                isinstance(raw_calls, list)
+                and len(raw_calls) > settings.max_tool_calls_per_turn
+            ):
+                raise ExplorerError(
+                    "ENDPOINT_BAD_RESPONSE", "Too many tool calls in one turn"
+                )
+            if response["choices"][0].get("finish_reason") == "length":
+                truncated = True
+                warnings.append("endpoint completion token limit reached")
+                citations = _validated_citations_from_content(
+                    str(message.get("content") or ""),
+                    repo_root=repo_root,
+                    settings=settings,
+                    evidence=evidence,
+                    warnings=warnings,
+                ) or _best_current_citations(evidence)
+                if not citations:
+                    raise ExplorerError(
+                        "ENDPOINT_BAD_RESPONSE",
+                        "Completion token limit reached without evidence",
+                    )
+                result = _finalize_result(
+                    request=request,
+                    repo_root=repo_root,
+                    settings=settings,
+                    answer="",
+                    citations=citations,
+                    turns_used=turn,
+                    truncated=True,
+                    warnings=warnings,
+                )
+                recorder.finish(result=result)
+                return result
             recorder.record_model_turn(turn, message)
             content_text = str(message.get("content") or "").strip()
             if content_text:
@@ -191,7 +220,6 @@ def explore(
 
             repeated_call = _first_repeated_tool_call(evidence, tool_calls)
             if repeated_call is not None:
-                evidence.repeated_tool_calls += 1
                 _append_warning_once(
                     warnings,
                     "repeated tool call stopped exploration",
@@ -220,7 +248,13 @@ def explore(
             )
             for tool_call, observation in zip(tool_calls, observations, strict=True):
                 observation.tool_call_id = tool_call.id
-                truncated = truncated or observation.truncated
+                payload = _model_observation_payload(
+                    observation,
+                    max_chars=settings.max_observation_chars,
+                )
+                truncated = truncated or bool(payload["truncated"])
+                for warning in observation.warnings:
+                    _append_warning_once(warnings, warning)
                 if (
                     tool_call.name == "read_file"
                     and observation.ok
@@ -235,10 +269,7 @@ def explore(
                         "tool_call_id": tool_call.id,
                         "name": tool_call.name,
                         "content": json.dumps(
-                            _model_observation_payload(
-                                observation,
-                                max_chars=settings.max_observation_chars,
-                            ),
+                            payload,
                             sort_keys=True,
                         ),
                     }
@@ -401,7 +432,11 @@ def _finalize_result(
         citations=citations,
         raw_locations=raw_locations,
         turns_used=turns_used,
-        truncated=truncated,
+        truncated=(
+            truncated
+            or any(x.truncated for x in raw_locations)
+            or "citation verification limit reached" in warnings
+        ),
         warnings=warnings,
     )
 
@@ -460,9 +495,7 @@ def _merge_adjacent_citations(citations: list[Citation]) -> list[Citation]:
                     current_reason_index = index
                 continue
 
-            merged.append(
-                Citation(path, current_start, current_end, current_reason)
-            )
+            merged.append(Citation(path, current_start, current_end, current_reason))
             current_start = start
             current_end = end
             current_reason = citation.reason
@@ -495,6 +528,7 @@ def _extract_raw_locations(
                 end_line=citation.end_line,
                 max_bytes=settings.max_read_bytes,
                 ignore=settings.ignore,
+                limits=settings.limits,
             )
         except ExplorerError:
             _append_warning_once(warnings, "raw location could not be read")
@@ -528,7 +562,7 @@ def _try_exact_fast_path(
     repo_root: Path,
     settings: Settings,
 ) -> ExploreResult | None:
-    if _is_semantic_query(request.query):
+    if not _is_exact_lookup(request.query):
         return None
     evidence = EvidenceState()
     warnings: list[str] = []
@@ -598,8 +632,42 @@ def _try_exact_fast_path(
     )
 
 
-def _is_semantic_query(query: str) -> bool:
-    return bool(SEMANTIC_QUERY_RE.search(query))
+def _is_exact_lookup(query: str) -> bool:
+    # Admit a small lookup vocabulary; any unexplained intent goes to the model.
+    paths = list(EXPLICIT_PATH_RE.finditer(query))
+    targets = list(EXACT_TEXT_RE.finditer(query))
+    if len(paths) > 1 or len(targets) > 1:
+        return False
+    remainder = CITATION_RE.sub(" ", query)
+    remainder = EXPLICIT_PATH_RE.sub(" ", remainder)
+    remainder = EXACT_TEXT_RE.sub(" ", remainder)
+    words = [m.group().lower() for m in TOKEN_RE.finditer(remainder)]
+    allowed = {
+        "find",
+        "return",
+        "show",
+        "use",
+        "in",
+        "the",
+        "definition",
+        "of",
+        "function",
+        "class",
+        "symbol",
+        "file",
+        "line",
+        "lines",
+        "citations",
+        "citation",
+        "only",
+        "where",
+    }
+    if not paths and not targets and not extract_citations(query):
+        unknown = [word for word in words if word not in allowed]
+        return len(unknown) == 1 and all(
+            word in allowed or word == unknown[0] for word in words
+        )
+    return all(word in allowed for word in words)
 
 
 def _extract_explicit_path(query: str) -> str | None:
@@ -735,6 +803,7 @@ def _grep_exact_target(
         glob=glob,
         max_results=MAX_FINAL_CITATIONS + 1,
         ignore=settings.ignore,
+        limits=settings.limits,
     )
 
 
@@ -765,9 +834,7 @@ def _line_matches_target(
     definitions_only: bool,
 ) -> bool:
     escaped = re.escape(target)
-    definition_pattern = (
-        rf"^\s*(?:async\s+def|def|class)\s+{escaped}\b"
-    )
+    definition_pattern = rf"^\s*(?:async\s+def|def|class)\s+{escaped}\b"
     if re.search(definition_pattern, line):
         return True
     if definitions_only:
@@ -788,6 +855,8 @@ def _validated_citations_from_content(
     parsed = extract_citations(content)
     if not parsed:
         return []
+    if len(parsed) > 16:
+        _append_warning_once(warnings, "citation verification limit reached")
     validated = _validate_citations(
         parsed,
         repo_root=repo_root,
@@ -807,7 +876,7 @@ def _validate_citations(
     evidence: EvidenceState,
 ) -> list[Citation]:
     validated: list[Citation] = []
-    for citation in citations:
+    for citation in citations[:16]:
         normalized = _normalize_citation(citation)
         if normalized is None:
             continue
@@ -822,9 +891,7 @@ def _validate_citations(
         )
         if verified is not None:
             validated.append(verified)
-    return _merge_adjacent_citations(_dedupe_citations(validated))[
-        :MAX_FINAL_CITATIONS
-    ]
+    return _merge_adjacent_citations(_dedupe_citations(validated))[:MAX_FINAL_CITATIONS]
 
 
 def _normalize_citation(citation: Citation) -> Citation | None:
@@ -905,6 +972,7 @@ def _verify_citation_by_read(
             end_line=citation.end_line,
             max_bytes=settings.max_read_bytes,
             ignore=settings.ignore,
+            limits=settings.limits,
         )
     except ExplorerError:
         return None
@@ -973,9 +1041,13 @@ def _should_finalize_before_tool_calls(
     tool_calls: list[ToolCall],
     settings: Settings,
 ) -> bool:
-    if not request.citation or _best_narrow_read_citation(evidence, settings) is None:
+    if (
+        not request.citation
+        or not _is_exact_lookup(request.query)
+        or _best_narrow_read_citation(evidence, settings) is None
+    ):
         return False
-    return any(
+    return bool(tool_calls) and all(
         _is_broad_read_on_seen_path(tool_call, evidence, settings)
         for tool_call in tool_calls
     )
@@ -1042,10 +1114,7 @@ def _first_repeated_tool_call(
     batch_fingerprints: set[str] = set()
     for tool_call in tool_calls:
         fingerprint = _tool_call_fingerprint(tool_call)
-        if (
-            fingerprint in evidence.seen_tool_calls
-            or fingerprint in batch_fingerprints
-        ):
+        if fingerprint in evidence.seen_tool_calls or fingerprint in batch_fingerprints:
             return tool_call
         batch_fingerprints.add(fingerprint)
     return None
@@ -1096,10 +1165,7 @@ def _citations_from_observations(
     for observation in observations:
         if observation.path is None or observation.line_range is None:
             continue
-        if (
-            observation.path not in answer
-            and Path(observation.path).name not in answer
-        ):
+        if observation.path not in answer and Path(observation.path).name not in answer:
             continue
         start, end = _parse_line_range(observation.line_range)
         key = (observation.path, start, end)
@@ -1198,6 +1264,17 @@ def _extract_message(response: dict[str, Any]) -> dict[str, Any]:
         raise ExplorerError(
             "ENDPOINT_BAD_RESPONSE", "Endpoint message must be an object"
         )
+    content = message.get("content")
+    if content is not None and not isinstance(content, str):
+        raise ExplorerError("ENDPOINT_BAD_RESPONSE", "Message content must be text")
+    if (
+        (not content or not content.strip())
+        and not message.get("tool_calls")
+        and first.get("finish_reason") != "length"
+    ):
+        raise ExplorerError(
+            "ENDPOINT_BAD_RESPONSE", "Endpoint returned an empty message"
+        )
     return cast(dict[str, Any], message)
 
 
@@ -1284,6 +1361,18 @@ def _model_observation_payload(
 
 
 def _cap_payload_content(payload: dict[str, object], max_chars: int) -> None:
+    for key in ("hits", "matches"):
+        rows = payload.get(key)
+        if isinstance(rows, list):
+            kept = []
+            size = 0
+            for row in rows:
+                size += len(json.dumps(row))
+                if size > max_chars:
+                    payload["truncated"] = True
+                    break
+                kept.append(row)
+            payload[key] = kept
     content = payload.get("content")
     if not isinstance(content, str) or len(content) <= max_chars:
         return
@@ -1351,9 +1440,9 @@ def _execute_tool_call(
                 end_line=end_line,
                 max_bytes=settings.max_read_bytes,
                 ignore=settings.ignore,
+                limits=settings.limits,
+                preview=clamped,
             )
-            if clamped:
-                observation.truncated = True
             return observation
         if tool_call.name == "repo_glob":
             return repo_glob(
@@ -1361,6 +1450,7 @@ def _execute_tool_call(
                 pattern=_required_str(tool_call.arguments, "pattern"),
                 max_results=settings.max_grep_results,
                 ignore=settings.ignore,
+                limits=settings.limits,
             )
         if tool_call.name == "repo_grep":
             requested_max = _optional_int(tool_call.arguments, "max_results")
@@ -1371,6 +1461,7 @@ def _execute_tool_call(
                 max_results=requested_max or settings.max_grep_results,
                 configured_max_results=settings.max_grep_results,
                 ignore=settings.ignore,
+                limits=settings.limits,
             )
     except ExplorerError as exc:
         return ToolObservation.from_error(exc, tool_call_id=tool_call.id)
@@ -1415,11 +1506,12 @@ def _bounded_read_lines(
 ) -> tuple[int | None, int | None, bool]:
     start_line = _optional_int(arguments, "start_line")
     end_line = _optional_int(arguments, "end_line")
-    if start_line is not None and end_line is not None:
-        max_end_line = start_line + settings.max_read_lines - 1
-        if end_line > max_end_line:
-            return start_line, max_end_line, True
-        return start_line, end_line, False
-    if start_line is None:
-        start_line = 1
-    return start_line, start_line + settings.max_read_lines - 1, True
+    start_line = 1 if start_line is None else start_line
+    if start_line <= 0 or (end_line is not None and end_line < start_line):
+        raise ExplorerError("INVALID_TOOL_ARGUMENTS", "Invalid read line range")
+    max_end = start_line + settings.max_read_lines - 1
+    return (
+        start_line,
+        min(end_line, max_end) if end_line is not None else max_end,
+        (end_line is None or end_line > max_end),
+    )

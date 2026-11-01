@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from flash_context.tools.safety import ScanLimits
 from flash_context.types import ExplorerError
+
+
+class _Unset(Enum):
+    VALUE = "unset"
+
 
 PROJECT_CONFIG_NAME = "config.yaml"
 PROJECT_ENV_NAME = ".env"
@@ -31,6 +39,17 @@ class Settings:
     temperature: float = 0.0
     max_parallel_tools: int = 4
 
+    max_scan_bytes: int = 16 * 1024 * 1024
+    max_scan_entries: int = 10_000
+    tool_timeout_seconds: float = 5.0
+    max_tool_calls_per_turn: int = 16
+
+    @property
+    def limits(self) -> ScanLimits:
+        return ScanLimits(
+            self.max_scan_bytes, self.max_scan_entries, self.tool_timeout_seconds
+        )
+
     def require_endpoint(self) -> None:
         if not self.base_url:
             raise ExplorerError(
@@ -52,7 +71,7 @@ class SettingsOverrides:
     max_turns: int | None = None
     max_read_bytes: int | None = None
     max_grep_results: int | None = None
-    traj_dir: Path | None = None
+    traj_dir: Path | None | _Unset = _Unset.VALUE
     ignore: list[str] | None = None
     timeout_seconds: float | None = None
     max_observation_chars: int | None = None
@@ -60,6 +79,10 @@ class SettingsOverrides:
     max_completion_tokens: int | None = None
     temperature: float | None = None
     max_parallel_tools: int | None = None
+    max_scan_bytes: int | None = None
+    max_scan_entries: int | None = None
+    tool_timeout_seconds: float | None = None
+    max_tool_calls_per_turn: int | None = None
 
 
 def load_settings(
@@ -98,7 +121,7 @@ def _load_dotenv(path: Path) -> dict[str, str]:
             f"Env path is not a file: {path}",
         )
     env: dict[str, str] = {}
-    lines = path.read_text(encoding="utf-8").splitlines()
+    lines = _read_config(path).splitlines()
     for line_number, raw_line in enumerate(lines, 1):
         line = raw_line.strip()
         if not line or line.startswith("#"):
@@ -131,12 +154,14 @@ def _parse_env_value(value: str) -> str:
 
 def _apply_yaml(settings: Settings, path: Path, *, project_root: Path) -> Settings:
     try:
-        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+        loaded = yaml.safe_load(_read_config(path))
     except yaml.YAMLError as exc:
         raise ExplorerError(
             "CONFIG_INVALID",
             f"Invalid YAML config: {path}",
-            details={"error": str(exc)},
+            details={"line": exc.problem_mark.line + 1}
+            if isinstance(exc, yaml.MarkedYAMLError) and exc.problem_mark
+            else {},
         ) from exc
     if loaded is None:
         data: dict[str, Any] = {}
@@ -148,7 +173,7 @@ def _apply_yaml(settings: Settings, path: Path, *, project_root: Path) -> Settin
     model = _section(data, "model")
     explorer = _section(data, "explorer")
     tools = _section(data, "tools")
-    traj_dir = explorer.get("traj_dir", settings.traj_dir) or data.get("traj_dir")
+    traj_dir = explorer.get("traj_dir", data.get("traj_dir", settings.traj_dir))
 
     return replace(
         settings,
@@ -189,8 +214,21 @@ def _apply_yaml(settings: Settings, path: Path, *, project_root: Path) -> Settin
             model.get("temperature", settings.temperature),
             "temperature",
         ),
-        traj_dir=_optional_project_path(traj_dir, project_root=project_root)
-        or settings.traj_dir,
+        traj_dir=_optional_project_path(traj_dir, project_root=project_root),
+        max_scan_bytes=_int_value(
+            tools.get("max_scan_bytes", settings.max_scan_bytes), "max_scan_bytes"
+        ),
+        max_scan_entries=_int_value(
+            tools.get("max_scan_entries", settings.max_scan_entries), "max_scan_entries"
+        ),
+        tool_timeout_seconds=_float_value(
+            tools.get("tool_timeout_seconds", settings.tool_timeout_seconds),
+            "tool_timeout_seconds",
+        ),
+        max_tool_calls_per_turn=_int_value(
+            tools.get("max_tool_calls_per_turn", settings.max_tool_calls_per_turn),
+            "max_tool_calls_per_turn",
+        ),
         ignore=_str_list(explorer.get("ignore", settings.ignore), "ignore"),
     )
 
@@ -198,6 +236,20 @@ def _apply_yaml(settings: Settings, path: Path, *, project_root: Path) -> Settin
 def _apply_env(settings: Settings, env: Mapping[str, str | None]) -> Settings:
     return replace(
         settings,
+        max_tool_calls_per_turn=_env_int(
+            env,
+            "FLASH_CONTEXT_MAX_TOOL_CALLS_PER_TURN",
+            settings.max_tool_calls_per_turn,
+        ),
+        tool_timeout_seconds=_env_float(
+            env, "FLASH_CONTEXT_TOOL_TIMEOUT_SECONDS", settings.tool_timeout_seconds
+        ),
+        max_scan_entries=_env_int(
+            env, "FLASH_CONTEXT_MAX_SCAN_ENTRIES", settings.max_scan_entries
+        ),
+        max_scan_bytes=_env_int(
+            env, "FLASH_CONTEXT_MAX_SCAN_BYTES", settings.max_scan_bytes
+        ),
         base_url=env.get("FLASH_CONTEXT_BASE_URL") or settings.base_url,
         model=env.get("FLASH_CONTEXT_MODEL") or settings.model,
         api_key=env.get("FLASH_CONTEXT_API_KEY", settings.api_key),
@@ -208,7 +260,11 @@ def _apply_env(settings: Settings, env: Mapping[str, str | None]) -> Settings:
         max_grep_results=_env_int(
             env, "FLASH_CONTEXT_MAX_GREP_RESULTS", settings.max_grep_results
         ),
-        traj_dir=_optional_path(env.get("FLASH_CONTEXT_TRAJ_DIR")) or settings.traj_dir,
+        traj_dir=(
+            _optional_path(env["FLASH_CONTEXT_TRAJ_DIR"])
+            if "FLASH_CONTEXT_TRAJ_DIR" in env
+            else settings.traj_dir
+        ),
         timeout_seconds=_env_float(
             env,
             "FLASH_CONTEXT_TIMEOUT_SECONDS",
@@ -243,51 +299,30 @@ def _apply_env(settings: Settings, env: Mapping[str, str | None]) -> Settings:
 
 
 def _apply_overrides(settings: Settings, overrides: SettingsOverrides) -> Settings:
+    values = {f.name: getattr(overrides, f.name) for f in fields(overrides)}
     return replace(
         settings,
-        base_url=overrides.base_url
-        if overrides.base_url is not None
-        else settings.base_url,
-        model=overrides.model if overrides.model is not None else settings.model,
-        api_key=overrides.api_key
-        if overrides.api_key is not None
-        else settings.api_key,
-        max_turns=overrides.max_turns
-        if overrides.max_turns is not None
-        else settings.max_turns,
-        max_read_bytes=overrides.max_read_bytes
-        if overrides.max_read_bytes is not None
-        else settings.max_read_bytes,
-        max_grep_results=overrides.max_grep_results
-        if overrides.max_grep_results is not None
-        else settings.max_grep_results,
-        traj_dir=overrides.traj_dir
-        if overrides.traj_dir is not None
-        else settings.traj_dir,
-        ignore=overrides.ignore if overrides.ignore is not None else settings.ignore,
-        timeout_seconds=overrides.timeout_seconds
-        if overrides.timeout_seconds is not None
-        else settings.timeout_seconds,
-        max_observation_chars=overrides.max_observation_chars
-        if overrides.max_observation_chars is not None
-        else settings.max_observation_chars,
-        max_read_lines=overrides.max_read_lines
-        if overrides.max_read_lines is not None
-        else settings.max_read_lines,
-        max_completion_tokens=overrides.max_completion_tokens
-        if overrides.max_completion_tokens is not None
-        else settings.max_completion_tokens,
-        temperature=overrides.temperature
-        if overrides.temperature is not None
-        else settings.temperature,
-        max_parallel_tools=overrides.max_parallel_tools
-        if overrides.max_parallel_tools is not None
-        else settings.max_parallel_tools,
+        **{
+            name: value
+            for name, value in values.items()
+            if not isinstance(value, _Unset)
+            and (value is not None or name == "traj_dir")
+        },
     )
 
 
 def _validate_settings(settings: Settings) -> None:
+    if (
+        not math.isfinite(settings.tool_timeout_seconds)
+        or settings.tool_timeout_seconds <= 0
+    ):
+        raise ExplorerError(
+            "CONFIG_INVALID", "tool_timeout_seconds must be finite and positive"
+        )
     int_fields = {
+        "max_scan_bytes": settings.max_scan_bytes,
+        "max_scan_entries": settings.max_scan_entries,
+        "max_tool_calls_per_turn": settings.max_tool_calls_per_turn,
         "max_turns": settings.max_turns,
         "max_read_bytes": settings.max_read_bytes,
         "max_grep_results": settings.max_grep_results,
@@ -303,13 +338,13 @@ def _validate_settings(settings: Settings) -> None:
                 f"{name} must be positive",
                 details={name: value},
             )
-    if settings.timeout_seconds <= 0:
+    if not math.isfinite(settings.timeout_seconds) or settings.timeout_seconds <= 0:
         raise ExplorerError(
             "CONFIG_INVALID",
             "timeout_seconds must be positive",
             details={"timeout_seconds": settings.timeout_seconds},
         )
-    if settings.temperature < 0:
+    if not math.isfinite(settings.temperature) or settings.temperature < 0:
         raise ExplorerError(
             "CONFIG_INVALID",
             "temperature must be non-negative",
@@ -389,3 +424,12 @@ def _str_list(value: object, name: str) -> list[str]:
     if not all(isinstance(item, str) for item in value):
         raise ExplorerError("CONFIG_INVALID", f"{name} entries must be strings")
     return list(value)
+
+
+def _read_config(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise ExplorerError(
+            "CONFIG_INVALID", "Configuration file could not be read"
+        ) from exc

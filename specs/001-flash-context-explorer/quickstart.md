@@ -6,7 +6,7 @@ This quickstart describes the implemented CLI-first behavior for spec `001`.
 
 - Python 3.13+
 - `uv`
-- OpenAI-compatible FastContext endpoint
+- OpenAI-compatible model endpoint with tool calling support
 - Local repository to inspect
 
 ## Install from PyPI
@@ -60,7 +60,7 @@ export FLASH_CONTEXT_API_KEY=
 export FLASH_CONTEXT_MAX_TURNS=6
 export FLASH_CONTEXT_MAX_READ_BYTES=12000
 export FLASH_CONTEXT_MAX_GREP_RESULTS=50
-export FLASH_CONTEXT_TRAJ_DIR=.flash-context
+export FLASH_CONTEXT_TRAJ_DIR=  # Disabled; logs must be outside the target repo.
 export FLASH_CONTEXT_TIMEOUT_SECONDS=120
 export FLASH_CONTEXT_MAX_OBSERVATION_CHARS=6000
 export FLASH_CONTEXT_MAX_READ_LINES=120
