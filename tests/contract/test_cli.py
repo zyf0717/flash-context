@@ -417,3 +417,48 @@ def test_cli_empty_tool_budget_failure_exits_six(
         assert warning in result["warnings"]
     else:
         assert captured.out.strip() == "NO_CITATIONS_FOUND"
+
+
+@pytest.mark.parametrize("output_format", ["text", "json"])
+def test_cli_documentation_fallback_keeps_evidence_and_warns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    output_format: str,
+) -> None:
+    warning = "implementation source not verified; returning documentation evidence"
+
+    def fake_explore(request: ExploreRequest, settings: Settings) -> ExploreResult:
+        return ExploreResult(
+            query=request.query,
+            repo_root=str(tmp_path),
+            answer="guide.md:1",
+            citations=[Citation("guide.md", 1, 1)],
+            turns_used=6,
+            truncated=True,
+            warnings=[warning],
+            raw_locations=[RawLocation("guide.md", 1, 1, "Overview\n")],
+        )
+
+    monkeypatch.setattr(cli, "explore", fake_explore)
+    code = cli.main(
+        [
+            "explore",
+            "--query",
+            "Find handler implementation",
+            "--repo",
+            str(tmp_path),
+            "--format",
+            output_format,
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code == 0
+    assert warning in captured.err
+    if output_format == "json":
+        payload = json.loads(captured.out)
+        assert payload["truncated"] is True
+        assert payload["warnings"] == [warning]
+        assert payload["raw_locations"][0]["text"] == "Overview\n"
+    else:
+        assert captured.out == "guide.md:1\n"

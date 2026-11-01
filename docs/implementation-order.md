@@ -143,3 +143,9 @@ Spec [009](../specs/009-explorer-hardening/spec.md) implements safety and
 correctness fixes before model benchmarking: external metadata-only logging,
 bounded scans/regex execution, conservative fast paths, accurate ranges and
 truncation, and structured endpoint/filesystem failures.
+
+## 8. Explorer progress and implementation evidence
+
+Spec [010](../specs/010-explorer-progress-and-evidence/spec.md) refines repeated-call
+handling and documentation-only finalization without changing budgets or safety
+exclusions, and fixes MCP initialization version metadata.

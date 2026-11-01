@@ -16,6 +16,17 @@ from flash_context.mcp_server import create_server
 
 
 async def check_mcp() -> None:
+    from mcp import ClientSession
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+
+    params = StdioServerParameters(command="flash-context", args=["mcp"])
+    async with (
+        stdio_client(params) as (read, write),
+        ClientSession(read, write) as session,
+    ):
+        result = await session.initialize()
+        assert result.serverInfo.name == "flash-context"
+        assert result.serverInfo.version == __version__
     tools = await create_server().list_tools()
     assert [tool.name for tool in tools] == ["explore_repository"]
     assert tools[0].inputSchema["required"] == ["query"]

@@ -79,3 +79,8 @@ Out of scope for the MVP:
 
 Spec `009` hardens lexical/resolved path checks, diagnostic privacy, bounded
 local execution, conservative exact routing, and endpoint termination handling.
+
+Spec [010](../specs/010-explorer-progress-and-evidence/spec.md) reuses duplicate
+observations while executing fresh sibling calls,
+continues implementation queries past documentation-only citations within the
+turn budget, and labels documentation-only fallback evidence as incomplete.

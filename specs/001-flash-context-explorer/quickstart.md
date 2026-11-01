@@ -203,3 +203,7 @@ CI checks Python 3.13 and 3.14, plus clean wheel and source installs.
 
 Errors are printed to stderr as `CODE: message`; denied paths never include file
 contents in the error payload.
+
+Implementation questions continue past documentation-only citations within the
+turn budget. Documentation-only fallbacks retain evidence with `truncated: true`
+and a warning; partial cited results still exit 0. Build outputs remain excluded.

@@ -37,9 +37,7 @@ def test_exact_citation_fast_path_skips_endpoint_config(tmp_path: Path) -> None:
     assert result.turns_used == 0
     assert result.answer == "agent.py:1-2"
     assert [citation.label() for citation in result.citations] == ["agent.py:1-2"]
-    assert result.raw_locations == [
-        RawLocation("agent.py", 1, 2, "line 1\nline 2\n")
-    ]
+    assert result.raw_locations == [RawLocation("agent.py", 1, 2, "line 1\nline 2\n")]
 
 
 def test_explicit_path_symbol_fast_path_returns_matching_line(
@@ -48,8 +46,7 @@ def test_explicit_path_symbol_fast_path_returns_matching_line(
     repo = tmp_path / "repo"
     (repo / "src").mkdir(parents=True)
     (repo / "src" / "config.py").write_text(
-        "class Settings:\n"
-        "    max_parallel_tools: int = 4\n",
+        "class Settings:\n    max_parallel_tools: int = 4\n",
         encoding="utf-8",
     )
     settings = Settings()
@@ -95,8 +92,7 @@ def test_pathless_unique_definition_fast_path_skips_endpoint(
     repo = tmp_path / "repo"
     (repo / "src").mkdir(parents=True)
     (repo / "src" / "agent.py").write_text(
-        "def explore():\n"
-        "    pass\n",
+        "def explore():\n    pass\n",
         encoding="utf-8",
     )
     settings = Settings()
@@ -166,10 +162,7 @@ def test_pathless_definition_in_markdown_does_not_fast_path(
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "spec.md").write_text(
-        "```python\n"
-        "def explore():\n"
-        "    pass\n"
-        "```\n",
+        "```python\ndef explore():\n    pass\n```\n",
         encoding="utf-8",
     )
     responses: Iterator[dict[str, object]] = iter(
@@ -398,49 +391,165 @@ def test_repeated_read_breaks_loop_with_best_evidence(tmp_path: Path) -> None:
     assert "repeated tool call stopped exploration" in result.warnings
 
 
-def test_duplicate_same_turn_tool_call_stops_before_scheduling(
+def test_duplicate_calls_reuse_observations_and_preserve_fresh_work(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    responses: Iterator[dict[str, object]] = iter(
+    (tmp_path / "a.py").write_text("def first(): pass\n")
+    (tmp_path / "b.py").write_text("def second(): pass\n")
+    calls: list[str] = []
+    execute = agent_module._execute_tool_call
+
+    def tracked(
+        call: ToolCall, *, repo_root: Path, settings: Settings
+    ) -> ToolObservation:
+        calls.append(str(call.arguments["glob"]))
+        return execute(call, repo_root=repo_root, settings=settings)
+
+    monkeypatch.setattr(agent_module, "_execute_tool_call", tracked)
+    first: dict[str, object] = {"pattern": "def", "glob": "a.py"}
+    second: dict[str, object] = {"pattern": "def", "glob": "b.py"}
+    responses = iter(
         [
             _multi_tool_response(
                 [
-                    ("call_1", "repo_glob", {"pattern": "**/*.py"}),
-                    ("call_2", "repo_glob", {"pattern": "**/*.py"}),
+                    ("a", "repo_grep", first),
+                    ("b", "repo_grep", first),
                 ]
-            )
+            ),
+            _multi_tool_response(
+                [
+                    ("c", "repo_grep", first),
+                    ("d", "repo_grep", second),
+                ]
+            ),
+            _message_response("b.py:1"),
         ]
     )
-    seen_payloads: list[dict[str, object]] = []
+    payloads: list[dict[str, object]] = []
     settings = Settings(base_url="http://test/v1", model="test-model")
-    client = ChatClient(settings, transport=_mock_transport(responses, seen_payloads))
-
-    def fail_if_scheduled(
-        tool_calls: list[ToolCall],
-        *,
-        repo_root: Path,
-        settings: Settings,
-    ) -> list[ToolObservation]:
-        raise AssertionError("duplicate same-turn calls must not be scheduled")
-
-    monkeypatch.setattr(
-        agent_module,
-        "_execute_tool_calls_parallel",
-        fail_if_scheduled,
-    )
-
+    client = ChatClient(settings, transport=_mock_transport(responses, payloads))
     result = explore(
-        ExploreRequest(query="Find files", repo_root=repo),
+        ExploreRequest(query="Find definitions", repo_root=tmp_path),
         settings,
         client=client,
     )
+    assert calls == ["a.py", "b.py"]
+    assert result.answer == "b.py:1"
+    messages = cast(list[dict[str, Any]], payloads[-1]["messages"])
+    observations = [m for m in messages if m["role"] == "tool"]
+    assert [m["tool_call_id"] for m in observations] == ["a", "b", "c", "d"]
+    assert [json.loads(m["content"])["tool_call_id"] for m in observations] == [
+        "a",
+        "b",
+        "c",
+        "d",
+    ]
+    assert observations[0]["content"] != observations[2]["content"]
+    assert "repeated tool call stopped exploration" not in result.warnings
 
-    assert len(seen_payloads) == 1
-    assert result.answer == "NO_CITATIONS_FOUND"
-    assert "repeated tool call stopped exploration" in result.warnings
+
+@pytest.mark.parametrize("trailing_tool", [False, True])
+def test_implementation_query_continues_past_documentation(
+    tmp_path: Path,
+    trailing_tool: bool,
+) -> None:
+    (tmp_path / "guide.md").write_text("Telegram overview\n")
+    (tmp_path / "handler.js").write_text("function handleTelegram() {}\n")
+    first = (
+        _tool_response(
+            "read", "read_file", {"path": "handler.js"}, content="guide.md:1"
+        )
+        if trailing_tool
+        else _message_response("guide.md:1")
+    )
+    responses = iter([first, _message_response("handler.js:1")])
+    payloads: list[dict[str, object]] = []
+    settings = Settings(base_url="http://test/v1", model="test-model")
+    result = explore(
+        ExploreRequest(
+            query="Where does the gateway handle Telegram messages?", repo_root=tmp_path
+        ),
+        settings,
+        client=ChatClient(settings, transport=_mock_transport(responses, payloads)),
+    )
+    assert result.turns_used == 2
+    assert result.answer == "handler.js:1"
+    assert not result.truncated
+    messages = cast(list[dict[str, Any]], payloads[-1]["messages"])
+    assert "Continue searching" in messages[-1]["content"]
+    if trailing_tool:
+        assert any(m["role"] == "tool" for m in messages)
+
+
+@pytest.mark.parametrize("citation", [False, True])
+def test_documentation_fallback_is_explicitly_incomplete(
+    tmp_path: Path,
+    citation: bool,
+) -> None:
+    (tmp_path / "guide.md").write_text("Telegram overview\n")
+    (tmp_path / "dist").mkdir()
+    (tmp_path / "dist/handler.js").write_text("SECRET_IMPLEMENTATION\n")
+    responses = iter(
+        [
+            _message_response("The implementation is in guide.md:1"),
+            _tool_response("denied", "read_file", {"path": "dist/handler.js"}),
+            _tool_response("repeat", "read_file", {"path": "dist/handler.js"}),
+        ]
+    )
+    payloads: list[dict[str, object]] = []
+    settings = Settings(base_url="http://test/v1", model="test-model", max_turns=3)
+    result = explore(
+        ExploreRequest(
+            query="Find the Telegram implementation",
+            repo_root=tmp_path,
+            citation=citation,
+        ),
+        settings,
+        client=ChatClient(settings, transport=_mock_transport(responses, payloads)),
+    )
+    assert result.answer == "guide.md:1"
+    assert result.truncated
+    assert result.raw_locations[0].text == "Telegram overview\n"
+    assert (
+        "implementation source not verified; returning documentation evidence"
+        in result.warnings
+    )
+    assert "SECRET_IMPLEMENTATION" not in json.dumps(payloads)
+
+
+def test_documentation_request_finishes_without_source_search(tmp_path: Path) -> None:
+    (tmp_path / "guide.md").write_text("Handler documentation\n")
+    settings = Settings(base_url="http://test/v1", model="test-model")
+    responses = iter([_message_response("guide.md:1")])
+    result = explore(
+        ExploreRequest(query="Find the handler documentation", repo_root=tmp_path),
+        settings,
+        client=ChatClient(settings, transport=_mock_transport(responses, [])),
+    )
+    assert result.turns_used == 1
+    assert not result.truncated
+    assert not result.warnings
+
+
+def test_documentation_fallback_at_turn_limit(tmp_path: Path) -> None:
+    (tmp_path / "README").write_text("Integration overview\n")
+    settings = Settings(base_url="http://test/v1", model="test-model", max_turns=2)
+    responses = iter([_message_response("README:1"), _message_response("README:1")])
+    result = explore(
+        ExploreRequest(
+            query="Find the Telegram handler implementation", repo_root=tmp_path
+        ),
+        settings,
+        client=ChatClient(settings, transport=_mock_transport(responses, [])),
+    )
+    assert result.turns_used == 2
+    assert result.answer == "README:1"
+    assert result.truncated
+    assert (
+        "implementation source not verified; returning documentation evidence"
+        in result.warnings
+    )
 
 
 def test_model_read_without_range_is_bounded_before_observation(
@@ -795,9 +904,7 @@ def test_citation_prompt_uses_final_answer_block_and_normalizes_output(
     responses: Iterator[dict[str, object]] = iter(
         [
             _message_response(
-                "Done.\n<final_answer>\n"
-                "src/api/validation.py:1-2\n"
-                "</final_answer>"
+                "Done.\n<final_answer>\nsrc/api/validation.py:1-2\n</final_answer>"
             )
         ]
     )
@@ -813,9 +920,7 @@ def test_citation_prompt_uses_final_answer_block_and_normalizes_output(
 
     first_messages = cast(list[dict[str, Any]], seen_payloads[0]["messages"])
     assert "<final_answer>" in str(first_messages[0]["content"])
-    assert "multiple tool calls in the same turn" in str(
-        first_messages[0]["content"]
-    )
+    assert "multiple tool calls in the same turn" in str(first_messages[0]["content"])
     assert result.answer == "src/api/validation.py:1-2"
     assert [citation.label() for citation in result.citations] == [
         "src/api/validation.py:1-2"
@@ -834,11 +939,7 @@ def test_final_citations_merge_and_raw_locations_use_merged_range(
     responses: Iterator[dict[str, object]] = iter(
         [
             _message_response(
-                "<final_answer>\n"
-                "a.py:1-3\n"
-                "a.py:4-8\n"
-                "a.py:7-10\n"
-                "</final_answer>"
+                "<final_answer>\na.py:1-3\na.py:4-8\na.py:7-10\n</final_answer>"
             )
         ]
     )
@@ -872,9 +973,7 @@ def test_raw_location_truncation_is_reported(tmp_path: Path) -> None:
     result = explore(ExploreRequest(query="Use big.py:1", repo_root=repo), settings)
 
     assert result.answer == "big.py:1"
-    assert result.raw_locations == [
-        RawLocation("big.py", 1, 1, "abc", truncated=True)
-    ]
+    assert result.raw_locations == [RawLocation("big.py", 1, 1, "abc", truncated=True)]
     assert "raw location truncated" in result.warnings
 
 
@@ -1045,9 +1144,7 @@ def test_trajectory_log_omits_raw_location_text(tmp_path: Path) -> None:
         model="test-model",
         traj_dir=traj_dir,
     )
-    responses: Iterator[dict[str, object]] = iter(
-        [_message_response("answer.py:1")]
-    )
+    responses: Iterator[dict[str, object]] = iter([_message_response("answer.py:1")])
     client = ChatClient(settings, transport=_mock_transport(responses, []))
 
     explore(
@@ -1260,3 +1357,43 @@ def test_capped_initial_file_sample_is_not_search_failure(tmp_path: Path) -> Non
         client.close()
     assert not result.truncated
     assert result.warnings == []
+
+
+def test_exact_documentation_path_stays_endpoint_free(tmp_path: Path) -> None:
+    (tmp_path / "guide.md").write_text("Handler overview\n")
+    result = explore(ExploreRequest(query="guide.md:1", repo_root=tmp_path), Settings())
+    assert result.turns_used == 0
+    assert result.answer == "guide.md:1"
+    assert not result.warnings
+
+
+@pytest.mark.parametrize("citation", [False, True])
+def test_source_reads_take_precedence_over_provisional_documentation(
+    tmp_path: Path,
+    citation: bool,
+) -> None:
+    (tmp_path / "guide.md").write_text("Handler overview\n")
+    (tmp_path / "handler.py").write_text("def handler(): pass\n")
+    responses = iter(
+        [
+            _tool_response(
+                "source", "read_file", {"path": "handler.py"}, content="guide.md:1"
+            ),
+            _message_response("Unverified documentation claim in guide.md:1"),
+        ]
+    )
+    settings = Settings(base_url="http://test/v1", model="test-model", max_turns=2)
+    result = explore(
+        ExploreRequest(
+            query="Where is the message handler implemented?",
+            repo_root=tmp_path,
+            citation=citation,
+        ),
+        settings,
+        client=ChatClient(settings, transport=_mock_transport(responses, [])),
+    )
+    assert result.answer == "handler.py:1"
+    assert (
+        "implementation source not verified; returning documentation evidence"
+        not in result.warnings
+    )

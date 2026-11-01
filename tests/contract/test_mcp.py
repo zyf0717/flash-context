@@ -34,6 +34,10 @@ def test_mcp_handler_delegates_to_core(tmp_path: Path) -> None:
                 RawLocation("src/api/validation.py", 1, 1, "def validate():\n")
             ],
             turns_used=1,
+            truncated=True,
+            warnings=[
+                "implementation source not verified; returning documentation evidence"
+            ],
         )
 
     result = explore_repository_handler(
@@ -45,6 +49,10 @@ def test_mcp_handler_delegates_to_core(tmp_path: Path) -> None:
         core=fake_core,
     )
 
+    assert result["truncated"] is True
+    assert result["warnings"] == [
+        "implementation source not verified; returning documentation evidence"
+    ]
     request = captured["request"]
     assert isinstance(request, ExploreRequest)
     assert request.max_turns == 2
@@ -188,6 +196,7 @@ def test_mcp_server_registers_explore_repository(
     class FakeServer:
         def __init__(self, name: str) -> None:
             self.name = name
+            self._mcp_server = SimpleNamespace(version=None)
             self.tools: dict[str, Callable[..., object]] = {}
 
         def tool(self) -> Callable[[Callable[..., object]], Callable[..., object]]:
@@ -225,3 +234,23 @@ def test_real_mcp_discovery_describes_repository_exploration() -> None:
     description = tools[0].description.lower()
     assert "read-only" in description
     assert "citations" in description and "snippets" in description
+
+
+def test_real_mcp_initialization_reports_package_version() -> None:
+    pytest.importorskip("mcp")
+    from mcp import ClientSession
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+
+    from flash_context import __version__
+
+    async def initialize() -> None:
+        params = StdioServerParameters(command="flash-context", args=["mcp"])
+        async with (
+            stdio_client(params) as (read, write),
+            ClientSession(read, write) as session,
+        ):
+            result = await session.initialize()
+            assert result.serverInfo.name == "flash-context"
+            assert result.serverInfo.version == __version__
+
+    asyncio.run(initialize())

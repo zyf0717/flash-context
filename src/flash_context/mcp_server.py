@@ -6,6 +6,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
+from flash_context import __version__
 from flash_context.agent import explore
 from flash_context.config import Settings, SettingsOverrides, load_settings
 from flash_context.types import ExploreRequest, ExplorerError, ExploreResult
@@ -52,6 +53,8 @@ def create_server() -> Any:
         ) from exc
     fast_mcp = fastmcp_module.FastMCP
     server = fast_mcp("flash-context")
+    # FastMCP exposes no version argument; the low-level default is the SDK version.
+    server._mcp_server.version = __version__
 
     @server.tool()  # type: ignore[untyped-decorator]
     def explore_repository(

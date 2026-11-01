@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -66,7 +66,8 @@ TOKEN_RE = re.compile(r"\b(?P<token>[A-Za-z_][A-Za-z0-9_]*)\b")
 class EvidenceState:
     reads: list[ToolObservation] = field(default_factory=list)
     citations: list[Citation] = field(default_factory=list)
-    seen_tool_calls: set[str] = field(default_factory=set)
+    observations: dict[str, ToolObservation] = field(default_factory=dict)
+    prefer_source: bool = False
 
 
 def explore(
@@ -103,7 +104,7 @@ def explore(
     warnings = list(file_sample.warnings)
     truncated = bool(warnings)
     last_content = ""
-    evidence = EvidenceState()
+    evidence = EvidenceState(prefer_source=_implementation_query(request.query))
 
     try:
         for turn in range(1, effective_max_turns + 1):
@@ -145,6 +146,7 @@ def explore(
                 recorder.finish(result=result)
                 return result
             recorder.record_model_turn(turn, message)
+            needs_source = False
             content_text = str(message.get("content") or "").strip()
             if content_text:
                 last_content = content_text
@@ -157,6 +159,12 @@ def explore(
                 )
                 if citations:
                     evidence.citations = citations
+                    needs_source = evidence.prefer_source and _documentation_only(
+                        citations
+                    )
+                if needs_source:
+                    last_content = ""
+                if citations and not needs_source:
                     if _message_has_tool_calls(message):
                         _append_warning_once(
                             warnings,
@@ -178,6 +186,11 @@ def explore(
             tool_calls = _extract_tool_calls(message)
             if not tool_calls:
                 citations = _best_current_citations(evidence)
+                if evidence.prefer_source and _documentation_only(citations):
+                    last_content = ""
+                    messages.append({"role": "assistant", "content": content_text})
+                    messages.append(_source_feedback())
+                    continue
                 if request.citation and content_text != NO_CITATIONS_FOUND:
                     _append_warning_once(
                         warnings,
@@ -187,7 +200,7 @@ def explore(
                     request=request,
                     repo_root=repo_root,
                     settings=settings,
-                    answer=content_text,
+                    answer="" if needs_source else content_text,
                     citations=citations,
                     turns_used=turn,
                     truncated=truncated,
@@ -219,8 +232,12 @@ def explore(
                 recorder.finish(result=result)
                 return result
 
-            repeated_call = _first_repeated_tool_call(evidence, tool_calls)
-            if repeated_call is not None:
+            fresh_calls: dict[str, ToolCall] = {}
+            for tool_call in tool_calls:
+                fingerprint = _tool_call_fingerprint(tool_call)
+                if fingerprint not in evidence.observations:
+                    fresh_calls.setdefault(fingerprint, tool_call)
+            if not fresh_calls:
                 _append_warning_once(
                     warnings,
                     "repeated tool call stopped exploration",
@@ -238,17 +255,18 @@ def explore(
                 )
                 recorder.finish(result=result)
                 return result
-            for tool_call in tool_calls:
-                evidence.seen_tool_calls.add(_tool_call_fingerprint(tool_call))
-
             messages.append(_assistant_tool_message(message))
             observations = _execute_tool_calls_parallel(
-                tool_calls,
+                list(fresh_calls.values()),
                 repo_root=repo_root,
                 settings=settings,
             )
-            for tool_call, observation in zip(tool_calls, observations, strict=True):
-                observation.tool_call_id = tool_call.id
+            evidence.observations.update(zip(fresh_calls, observations, strict=True))
+            for tool_call in tool_calls:
+                observation = replace(
+                    evidence.observations[_tool_call_fingerprint(tool_call)],
+                    tool_call_id=tool_call.id,
+                )
                 payload = _model_observation_payload(
                     observation,
                     max_chars=settings.max_observation_chars,
@@ -262,7 +280,9 @@ def explore(
                     and observation.path
                     and observation.line_range
                 ):
-                    evidence.reads.append(observation)
+                    read = replace(observation, tool_call_id=None)
+                    if read not in evidence.reads:
+                        evidence.reads.append(read)
                 recorder.record_observation(turn, tool_call.name, observation)
                 messages.append(
                     {
@@ -275,6 +295,8 @@ def explore(
                         ),
                     }
                 )
+            if needs_source:
+                messages.append(_source_feedback())
         if last_content:
             citations = _validated_citations_from_content(
                 last_content,
@@ -418,6 +440,13 @@ def _finalize_result(
     warnings: list[str],
 ) -> ExploreResult:
     citations = _merge_adjacent_citations(citations)[:MAX_FINAL_CITATIONS]
+    if _implementation_query(request.query) and _documentation_only(citations):
+        truncated = True
+        answer = _citation_text(citations)
+        _append_warning_once(
+            warnings,
+            "implementation source not verified; returning documentation evidence",
+        )
     if request.citation or (not answer and citations):
         answer = _citation_text(citations)
     raw_locations = _extract_raw_locations(
@@ -1016,6 +1045,19 @@ def _dedupe_citations(citations: list[Citation]) -> list[Citation]:
 
 
 def _best_current_citations(evidence: EvidenceState) -> list[Citation]:
+    if evidence.prefer_source:
+        source_reads = [
+            read for read in evidence.reads if not _documentation_path(read.path or "")
+        ]
+        source_citations = [
+            citation
+            for citation in evidence.citations
+            if not _documentation_path(citation.path)
+        ]
+        if source_citations or source_reads:
+            return source_citations[:MAX_FINAL_CITATIONS] or _citations_from_reads(
+                source_reads
+            )
     if evidence.citations:
         return evidence.citations[:MAX_FINAL_CITATIONS]
     return _citations_from_reads(evidence.reads)
@@ -1120,17 +1162,44 @@ def _tool_call_fingerprint(tool_call: ToolCall) -> str:
     )
 
 
-def _first_repeated_tool_call(
-    evidence: EvidenceState,
-    tool_calls: list[ToolCall],
-) -> ToolCall | None:
-    batch_fingerprints: set[str] = set()
-    for tool_call in tool_calls:
-        fingerprint = _tool_call_fingerprint(tool_call)
-        if fingerprint in evidence.seen_tool_calls or fingerprint in batch_fingerprints:
-            return tool_call
-        batch_fingerprints.add(fingerprint)
-    return None
+def _implementation_query(query: str) -> bool:
+    if _is_exact_lookup(query) or re.search(
+        r"\b(?:docs?|documentation|markdown|readme)\b", query, re.IGNORECASE
+    ):
+        return False
+    return bool(
+        re.search(
+            r"\b(?:implement\w*|handl\w*|code|functions?|methods?|classes|class)\b",
+            query,
+            re.IGNORECASE,
+        )
+    )
+
+
+def _documentation_path(path: str) -> bool:
+    name = Path(path).name.lower()
+    return Path(name).suffix in {".md", ".mdx", ".rst", ".txt", ".adoc"} or name in {
+        "readme",
+        "changelog",
+        "contributing",
+        "license",
+        "authors",
+    }
+
+
+def _documentation_only(citations: list[Citation]) -> bool:
+    return bool(citations) and all(_documentation_path(c.path) for c in citations)
+
+
+def _source_feedback() -> dict[str, str]:
+    return {
+        "role": "user",
+        "content": (
+            "These citations only establish documentation evidence. Continue searching "
+            "for implementation source using fresh, focused read-only tool calls. "
+            "Do not repeat previous calls or bypass denied paths."
+        ),
+    }
 
 
 def _message_has_tool_calls(message: dict[str, Any]) -> bool:
