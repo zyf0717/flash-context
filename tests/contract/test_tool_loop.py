@@ -123,6 +123,7 @@ def test_model_read_without_range_is_bounded_before_observation(
         [
             _tool_response("call_1", "read_file", {"path": "agent.py"}),
             _message_response("The file has the answer."),
+            _message_response("NO_CITATIONS_FOUND"),
         ]
     )
     seen_payloads: list[dict[str, object]] = []
@@ -139,7 +140,7 @@ def test_model_read_without_range_is_bounded_before_observation(
         client=client,
     )
 
-    observation = _last_tool_payload(seen_payloads)
+    observation = _last_tool_payload(seen_payloads[:-1])
     assert observation["line_range"] == "1-3"
     assert observation["truncated"] is True
     assert "3: line 3" in str(observation["content"])

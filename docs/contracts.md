@@ -58,9 +58,11 @@ references, documentation, and other languages remain eligible lexical evidence.
 
 ## Model anchors and boundaries
 
-Models propose `path#qualified.symbol` or `path:line`. Local code computes ranges;
-model ranges are rejected with one correction opportunity inside the existing
-turn budget. Each turn returns its own accepted anchors, feedback, and diagnostics.
+Models propose `path#qualified.symbol`, `path:line`, or `path:start-end`.
+Local code computes ranges; model ranges are normalized to complete parsed syntax units. Invalid ranges
+receive one correction opportunity inside the existing turn budget. Range
+expansions obey citation budgets atomically; they are never silently cropped.
+Each turn returns its own accepted anchors, feedback, and diagnostics.
 Prose uses the original anchor-to-citation mapping, including overlapping units.
 
 Bundled Tree-sitter grammars cover Python, JS/JSX, TS/TSX, C/C++, C#, Java, Go,
@@ -75,7 +77,7 @@ out, and successfully parsed input. Input caps and parser deadlines emit explici
 incomplete-result diagnostics. Symbols require parsed definitions. Grammars are
 bundled and never downloaded during exploration.
 
-Defaults: 120 lines per model citation, 240 unique file-lines total, 12 citations,
+Defaults: 120 lines per model citation, 600 unique file-lines total, 16 citations,
 16 candidate anchors, 1 MiB parser input per file. Cumulative parser input obeys
 `max_scan_bytes`; parsing/traversal obey tool deadlines. Explicit user ranges,
 previews, and deterministic local lookups retain read byte caps and are exempt
@@ -84,9 +86,16 @@ Unicode separators inside strings do not create additional lines.
 
 ## Progress and termination
 
+With at least two turns, one turn is reserved for final evidence selection;
+`max_turns=1` retains a single discovery turn. Unscoped semantic queries start
+with grep/glob tools, then enable reads. Stalled discovery or prose without
+usable citations can enter selection early. Selection receives the query and
+bounded, deduplicated observations in a fresh conversation without tools.
+Successful early answers and explicit `NO_CITATIONS_FOUND` remain terminal.
+
 Valid selected evidence ends exploration before trailing tool calls. Calls
 repeated in later turns reuse observations; fresh siblings still execute, and
-an entirely repeated batch stops. Exact queries may stop before a broad read
+an entirely repeated batch ends discovery. Exact queries may stop before a broad read
 when sufficient narrow evidence is already verified. Semantic queries never
 promote unselected reads; exact queries may derive verified token anchors.
 

@@ -72,7 +72,9 @@ def test_httpx_redirects() -> None:
         )
         == 15
     )
-    assert resolver.parse("httpx/_client.py:470-1000").citations == []
+    expanded = resolver.parse("httpx/_client.py:470-1000")
+    assert len(expanded.citations) == 15
+    assert sum(c.end_line - c.start_line + 1 for c in expanded.citations) == 465
 
 
 def test_large_definition_line_and_header(tmp_path: Path) -> None:
@@ -134,7 +136,7 @@ def test_range_repair_and_no_fallback_bypass(tmp_path: Path) -> None:
         client.close()
     assert result.answer == "a.py:1-2"
     assert result.turns_used == 2
-    assert b"Model ranges are unsupported" in payloads[-1]
+    assert b"Range bounds must be ordered" in payloads[-1]
 
 
 @pytest.mark.parametrize(

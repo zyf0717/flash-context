@@ -30,6 +30,7 @@ def test_trajectory_log_omits_denied_file_content(tmp_path: Path) -> None:
         [
             _tool_response("call_1", "read_file", {"path": ".env"}),
             _message_response("No accessible citation."),
+            _message_response("NO_CITATIONS_FOUND"),
         ]
     )
     client = ChatClient(settings, transport=_mock_transport(responses, []))

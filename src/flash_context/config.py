@@ -29,7 +29,7 @@ class Settings:
     api_key: str | None = None
     max_turns: int = 6
     max_citation_lines: int = 120
-    max_total_citation_lines: int = 240
+    max_total_citation_lines: int = 600
     max_parse_bytes: int = 1_048_576
     max_read_bytes: int = 12_000
     max_grep_results: int = 50

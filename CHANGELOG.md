@@ -4,6 +4,25 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Clarify exploration and evidence-selection prompts to cite code that performs
+  the requested behavior; comments and strings remain supporting evidence (#18).
+- Consolidate symbol preflight into the leading system message for strict chat
+  templates; preserve missing-symbol diagnostics and genuine endpoint errors.
+- Normalize model ranges to complete syntax units with atomic budget checks and
+  one-to-many prose mappings. Repair feedback includes anchor examples.
+- Reserve a final evidence-selection turn and start unscoped semantic discovery
+  with search tools. Record request phases, roles, tool counts, and HTTP status
+  without logging repository or endpoint content.
+
+### Changed
+
+- Increase the default model citation budget to 600 unique lines and 16 citations.
+  The 120-line per-citation limit and explicit configured limits still apply.
+  Selection counts toward the existing turn budget; single-turn requests retain
+  their previous behavior. CLI/MCP result schemas are unchanged.
+
 ## [0.4.0] - 2026-11-01
 
 ### Added
