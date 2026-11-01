@@ -51,7 +51,8 @@ controller-validated citations and report `turns_used: 0` in JSON output.
 
 Validation establishes safe paths and existing line coverage, not relevance or
 minimality. The model is prompted to prefer implementation source for coding
-questions and the smallest supporting line ranges. No refinement turn is added.
+questions and the smallest supporting line ranges. Source-search continuation
+uses the existing turn budget.
 
 ## JSON Output
 
@@ -121,3 +122,14 @@ In-root trajectory destinations are configuration errors. `PATH_UNREADABLE`
 identifies filesystem access failures; tool budget failures use
 `TOOL_LIMIT_EXCEEDED`. CLI exit categories remain configuration 3, path 4,
 endpoint 5, and other exploration errors 6.
+
+## Exploration progress and evidence
+
+For implementation-intent questions, documentation-only citations are provisional:
+the controller requests source evidence within the remaining turn budget. If only
+documentation remains at termination, citations and snippets are retained with
+`truncated: true` and an implementation-unverified warning. Detection uses query
+terms and common documentation filenames; it does not establish semantic relevance.
+Explicit documentation requests and exact lookups retain their existing behavior.
+Repeated calls reuse observations while fresh sibling calls execute; an entirely
+repeated batch stops exploration. Resource limits and result schemas are unchanged.

@@ -4,6 +4,28 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-01
+
+### Fixed
+
+- Report the flash-context package version during MCP initialization instead of
+  the MCP SDK version.
+- Reuse repeated tool observations without discarding fresh searches in the same
+  batch; execute same-turn duplicates only once and stop all-repeat stalls.
+- Continue implementation searches after documentation-only citations within the
+  existing turn budget. Documentation-only fallbacks retain citations and snippets
+  with explicit incomplete-result metadata and warnings.
+
+### Changed
+
+- Describe deterministic lookup and delegated model search together in the README.
+
+### Migration
+
+- Implementation questions may use additional turns before returning documentation
+  evidence. These fallbacks set `truncated: true`; partial cited CLI results still
+  exit 0. Budgets, configuration keys, and result schemas are unchanged.
+
 ## [0.3.0] - 2026-11-01
 
 ### Fixed

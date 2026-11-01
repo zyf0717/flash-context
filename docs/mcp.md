@@ -79,3 +79,16 @@ safe, existing line coverage rather than semantic relevance or minimum ranges.
 
 Scan limits, incomplete-result warnings, and metadata-only external logging use
 the same [configuration](configuration.md) and core behavior as the CLI.
+
+## Exploration progress and evidence
+
+For implementation-intent questions, documentation-only citations are provisional:
+the controller requests source evidence within the remaining turn budget. If only
+documentation remains at termination, citations and snippets are retained with
+`truncated: true` and an implementation-unverified warning. Detection uses query
+terms and common documentation filenames; it does not establish semantic relevance.
+Explicit documentation requests and exact lookups retain their existing behavior.
+Repeated calls reuse observations while fresh sibling calls execute; an entirely
+repeated batch stops exploration. Resource limits and result schemas are unchanged.
+
+MCP initialization reports the installed flash-context package version.

@@ -1,6 +1,6 @@
 [project]
 name = "flash-context"
-version = "0.3.0"
+version = "0.3.1"
 description = "Read-only context exploration and retrieval for AI agents, starting with codebases and repositories."
 readme = "README.md"
 requires-python = ">=3.13"
