@@ -8,11 +8,13 @@
 Read-only context exploration and retrieval for AI agents,
 available as a Python CLI and Model Context Protocol (MCP) server.
 
-Ask natural-language questions across source code, documentation, configuration,
-and other local text files, and get validated file-line citations and snippets.
-The current focus is codebases and repositories. Both interfaces share one
-exploration core, backed by an OpenAI-compatible FastContext-style endpoint.
-Local tools enforce read-only access, path safety, and resource limits.
+Delegate recursive, repetitive file search and reading to a utility model
+behind an OpenAI-compatible endpoint. The calling agent receives validated
+file-line citations and source snippets to use in its main task.
+
+Codebases and repositories are the current focus; the same tools explore
+documentation, configuration, and other local text files. CLI and MCP share one
+exploration core with read-only tools, path safety, and resource limits.
 
 ## Quickstart
 
