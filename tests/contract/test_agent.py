@@ -1149,3 +1149,114 @@ def _message_response(content: str) -> dict[str, object]:
             }
         ]
     }
+
+
+@pytest.mark.parametrize(
+    ("query", "path"),
+    [
+        ("pkg/base.py", "pkg/base.py"),
+        ('"pkg/base.py"', "pkg/base.py"),
+        ("'base.py'", "base.py"),
+        ("`README.md`", "README.md"),
+        ("LICENSE", "LICENSE"),
+    ],
+)
+def test_bare_path_returns_bounded_preview_without_endpoint(
+    tmp_path: Path, query: str, path: str
+) -> None:
+    file = tmp_path / path
+    file.parent.mkdir(exist_ok=True)
+    file.write_text("one\ntwo\nthree\n")
+    result = explore(
+        ExploreRequest(query=query, repo_root=tmp_path), Settings(max_read_lines=2)
+    )
+    assert result.turns_used == 0
+    assert result.answer == f"{path}:1-2"
+    assert result.raw_locations == [RawLocation(path, 1, 2, "one\ntwo\n")]
+    assert result.truncated
+
+
+@pytest.mark.parametrize("query", ["missing.py", "empty.py", ".env.local", "../out.py"])
+def test_unusable_bare_path_retains_model_routing(tmp_path: Path, query: str) -> None:
+    (tmp_path / "empty.py").touch()
+    (tmp_path / ".env.local").write_text("SECRET")
+    with pytest.raises(ExplorerError, match="CONFIG_MISSING_ENDPOINT") as error:
+        explore(ExploreRequest(query=query, repo_root=tmp_path), Settings())
+    assert "SECRET" not in str(error.value)
+
+
+def test_unique_definition_ignores_reference_match_cap(tmp_path: Path) -> None:
+    (tmp_path / "a_refs.py").write_text("ref = BaseTransport\n" * 20)
+    (tmp_path / "z_base.py").write_text("class BaseTransport:\n    pass\n")
+    result = explore(
+        ExploreRequest(query="BaseTransport", repo_root=tmp_path), Settings()
+    )
+    assert result.turns_used == 0
+    assert result.answer == "z_base.py:1"
+
+
+@pytest.mark.parametrize("incomplete", [False, True])
+def test_unique_definition_requires_complete_unambiguous_source_and_stubs(
+    tmp_path: Path, incomplete: bool
+) -> None:
+    (tmp_path / "a.py").write_text("class Target: pass\n")
+    if incomplete:
+        (tmp_path / "z.py").write_text("# padding\n" * 20)
+    else:
+        (tmp_path / "a.pyi").write_text("class Target: ...\n")
+    with pytest.raises(ExplorerError, match="CONFIG_MISSING_ENDPOINT"):
+        explore(
+            ExploreRequest(query="Target", repo_root=tmp_path),
+            Settings(max_scan_bytes=30 if incomplete else 1000),
+        )
+
+
+@pytest.mark.parametrize("exhausted", [False, True])
+def test_model_search_scan_failure_reaches_shared_result(
+    tmp_path: Path, exhausted: bool
+) -> None:
+    (tmp_path / "a.py").write_text("padding\n" * 20)
+    responses = iter(
+        [
+            _tool_response("1", "repo_grep", {"pattern": "not_here"}),
+            _message_response("NO_CITATIONS_FOUND"),
+        ]
+    )
+    settings = Settings(
+        base_url="http://test/v1",
+        model="mock",
+        max_scan_bytes=10 if exhausted else 1000,
+    )
+    seen: list[dict[str, object]] = []
+    client = ChatClient(settings, transport=_mock_transport(responses, seen))
+    try:
+        result = explore(
+            ExploreRequest(query="How is this implemented?", repo_root=tmp_path),
+            settings,
+            client=client,
+        )
+    finally:
+        client.close()
+    assert result.answer == "NO_CITATIONS_FOUND"
+    assert result.truncated is exhausted
+    assert result.warnings == (["grep scan budget exhausted"] if exhausted else [])
+    assert _last_tool_payload(seen)["truncated"] is exhausted
+
+
+def test_capped_initial_file_sample_is_not_search_failure(tmp_path: Path) -> None:
+    for name in ("a.py", "b.py"):
+        (tmp_path / name).write_text("answer\n")
+    settings = Settings(base_url="http://test/v1", model="mock", max_grep_results=1)
+    responses = iter([_message_response("NO_CITATIONS_FOUND")])
+    seen: list[dict[str, object]] = []
+    client = ChatClient(settings, transport=_mock_transport(responses, seen))
+    try:
+        result = explore(
+            ExploreRequest(query="How is this implemented?", repo_root=tmp_path),
+            settings,
+            client=client,
+        )
+    finally:
+        client.close()
+    assert not result.truncated
+    assert result.warnings == []

@@ -127,7 +127,6 @@ Fields:
 - `path: str`
 - `start_line: int | None`
 - `end_line: int | None`
-- `reason: str | None`
 
 Rules:
 

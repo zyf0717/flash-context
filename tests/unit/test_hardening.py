@@ -121,8 +121,39 @@ def test_trajectory_rejects_repository_destination_and_omits_text(
     recorder.record_observation(
         1, "repo_grep", ToolObservation(hits=[SearchHit("a.py", 1, "SECRET_SOURCE")])
     )
+    recorder.record_observation(
+        1, "repo_glob", ToolObservation(matches=["SECRET_PATH"])
+    )
+    recorder.record_observation(
+        2, "read_file", ToolObservation(content="SECRET_SOURCE")
+    )
     recorder.finish()
-    assert "SECRET" not in next((tmp_path / "logs").glob("*.json")).read_text()
+    content = next((tmp_path / "logs").glob("*.json")).read_text()
+    assert "SECRET" not in content
+    observations = json.loads(content)["turns"][1:]
+    assert observations == [
+        {
+            "turn": 1,
+            "tool": "repo_grep",
+            "ok": True,
+            "truncated": False,
+            "hit_count": 1,
+        },
+        {
+            "turn": 1,
+            "tool": "repo_glob",
+            "ok": True,
+            "truncated": False,
+            "match_count": 1,
+        },
+        {
+            "turn": 2,
+            "tool": "read_file",
+            "ok": True,
+            "truncated": False,
+            "content_length": 13,
+        },
+    ]
     assert not list(repo.iterdir())
 
 
@@ -338,3 +369,75 @@ def test_cli_and_mcp_reject_internal_logging(
     )
     assert cast(dict[str, object], result["error"])["code"] == "CONFIG_INVALID"
     assert not (tmp_path / "logs").exists()
+
+
+@pytest.mark.parametrize("pattern", ["pkg/base.py", "pkg/*.py", "pkg/**/*.py"])
+def test_scoped_searches_do_not_scan_unrelated_directories(
+    tmp_path: Path, pattern: str
+) -> None:
+    (tmp_path / "docs").mkdir()
+    for i in range(20):
+        (tmp_path / "docs" / f"{i}.md").write_text("noise")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "base.py").write_text("class Target: pass\n")
+    limits = ScanLimits(max_scan_entries=3)
+    with patch("flash_context.tools.safety.os.scandir", wraps=os.scandir) as scan:
+        glob = repo_glob(
+            repo_root=tmp_path, pattern=pattern, max_results=10, limits=limits
+        )
+        grep = repo_grep(
+            repo_root=tmp_path,
+            pattern="Target",
+            glob=pattern,
+            max_results=10,
+            limits=limits,
+        )
+    assert glob.matches == ["pkg/base.py"]
+    assert [hit.path for hit in grep.hits] == ["pkg/base.py"]
+    assert not glob.truncated and not grep.truncated
+    assert all(call.args[0] == tmp_path / "pkg" for call in scan.call_args_list)
+    if pattern == "pkg/base.py":
+        scan.assert_not_called()
+
+
+@pytest.mark.parametrize("suffix", ["base.py", "*.py", "**/*.py"])
+@pytest.mark.parametrize("blocked", ["deny", "ignore", "symlink"])
+def test_scoped_search_prefix_preserves_directory_policy(
+    tmp_path: Path, suffix: str, blocked: str
+) -> None:
+    directory = "secrets" if blocked == "deny" else "parent/pkg"
+    if blocked == "symlink":
+        (tmp_path / "target").mkdir()
+        (tmp_path / "target" / "base.py").write_text("SECRET")
+        (tmp_path / directory).parent.mkdir(exist_ok=True)
+        (tmp_path / directory).symlink_to(tmp_path / "target", target_is_directory=True)
+    else:
+        (tmp_path / directory).mkdir(parents=True)
+        (tmp_path / directory / "base.py").write_text("SECRET")
+    ignore = [directory] if blocked == "ignore" else []
+    with patch("flash_context.tools.safety.os.scandir", wraps=os.scandir) as scan:
+        result = repo_grep(
+            repo_root=tmp_path,
+            pattern="SECRET",
+            glob=f"{directory}/{suffix}",
+            max_results=10,
+            ignore=ignore,
+        )
+    assert not result.hits
+    assert not result.truncated
+    scan.assert_not_called()
+
+
+@pytest.mark.parametrize("target", ["../outside.py", ".env.local"])
+def test_literal_search_rejects_unsafe_resolved_files(
+    tmp_path: Path, target: str
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / target).write_text("SECRET")
+    (repo / "alias.py").symlink_to(target)
+    result = repo_grep(
+        repo_root=repo, pattern="SECRET", glob="alias.py", max_results=10
+    )
+    assert not result.hits
+    assert "SECRET" not in json.dumps(result.to_dict())

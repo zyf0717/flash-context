@@ -37,6 +37,15 @@ unclear confidence continues into the existing FastContext model loop unchanged.
 
 ## Fast-Path Cases
 
+### Bare File Path
+
+A query consisting solely of one repository-relative file path, optionally
+quoted with matching backticks or single/double quotes, can return a bounded
+preview without endpoint configuration. Use the existing safe reader with
+`max_read_bytes`, `max_read_lines`, and scan limits. Cite only actual preview
+line coverage and preserve truncation. Missing, empty, denied, or unsafe files
+retain model-loop routing. Extensionless file names are also supported.
+
 ### Explicit Citation
 
 If the query contains a parseable repository-relative citation such as:
@@ -78,6 +87,8 @@ If the query contains an exact symbol but no explicit path:
   Python source files;
 - short-circuit only if exactly one high-confidence definition-pattern match
   exists across the repository;
+- search anchored definition patterns directly, so ordinary references do not
+  exhaust the match cap before definition filtering;
 - pathless assignment/config-style matches do not short-circuit in v1;
 - if multiple files match, multiple definition patterns match, limits are
   exceeded, or confidence is otherwise unclear, continue into the model loop.
@@ -144,6 +155,8 @@ The helper should:
 
 Regression tests cover:
 
+- bare paths return bounded previews with `turns_used=0` and accurate truncation;
+- unique definitions surrounded by many references still resolve locally;
 - explicit `path:start-end` query returns `turns_used=0` and does not call the
   endpoint;
 - explicit path plus symbol returns matching lines in that file;

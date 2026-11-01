@@ -11,6 +11,15 @@ from flash_context.config import SettingsOverrides, load_settings
 from flash_context.mcp_server import run_mcp
 from flash_context.types import ExploreRequest, ExplorerError
 
+_SCAN_LIMIT_WARNINGS = frozenset(
+    {
+        "glob scan budget exhausted",
+        "grep scan budget exhausted",
+        "read scan budget exhausted",
+        "grep match timed out",
+    }
+)
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
@@ -60,6 +69,12 @@ def _run_explore(args: argparse.Namespace) -> int:
         print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
     else:
         print(format_text_result(result, citation=args.citation))
+    for warning in result.warnings:
+        print(f"WARNING: {warning}", file=sys.stderr)
+    if result.truncated and not result.warnings:
+        print("WARNING: Result truncated", file=sys.stderr)
+    if not result.citations and _SCAN_LIMIT_WARNINGS.intersection(result.warnings):
+        return 6
     return 0
 
 

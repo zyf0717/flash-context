@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -18,6 +19,7 @@ async def check_mcp() -> None:
     tools = await create_server().list_tools()
     assert [tool.name for tool in tools] == ["explore_repository"]
     assert tools[0].inputSchema["required"] == ["query"]
+    assert tools[0].description
 
 
 def main() -> None:
@@ -32,34 +34,47 @@ def main() -> None:
         repo = Path(directory)
         source = "def sample():\n    return 42\n"
         (repo / "sample.py").write_text(source, encoding="utf-8")
-        result = subprocess.run(
-            [
-                "flash-context",
-                "explore",
-                "--repo",
-                directory,
-                "--query",
-                "sample.py:1-2",
-                "--format",
-                "json",
-            ],
-            cwd=repo,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        payload = json.loads(result.stdout)
-        assert payload["turns_used"] == 0
-        assert payload["answer"] == "sample.py:1-2"
-        assert payload["raw_locations"] == [
-            {
-                "path": "sample.py",
-                "start_line": 1,
-                "end_line": 2,
-                "text": source,
-                "truncated": False,
-            }
-        ]
+        (repo / "a_refs.py").write_text("ref = sample\n" * 20, encoding="utf-8")
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("FLASH_CONTEXT_")
+        }
+        for query, end_line in [("sample.py:1-2", 2), ("sample.py", 2), ("sample", 1)]:
+            result = subprocess.run(
+                [
+                    "flash-context",
+                    "explore",
+                    "--repo",
+                    directory,
+                    "--query",
+                    query,
+                    "--format",
+                    "json",
+                ],
+                cwd=repo,
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            payload = json.loads(result.stdout)
+            assert payload["turns_used"] == 0
+            assert payload["answer"] == (
+                "sample.py:1-2" if end_line == 2 else "sample.py:1"
+            )
+            assert payload["citations"] == [
+                {"path": "sample.py", "start_line": 1, "end_line": end_line}
+            ]
+            assert payload["raw_locations"] == [
+                {
+                    "path": "sample.py",
+                    "start_line": 1,
+                    "end_line": end_line,
+                    "text": "".join(source.splitlines(keepends=True)[:end_line]),
+                    "truncated": False,
+                }
+            ]
     if args.mcp:
         asyncio.run(check_mcp())
     else:

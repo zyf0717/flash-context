@@ -43,9 +43,15 @@ Model-facing tool observations are latency bounded. Model-requested reads may
 be returned as bounded previews, but local repository safety and read byte caps
 still apply before any content is observed.
 
-Exact repository-relative citations and uniquely defined symbols may resolve
-without contacting the endpoint. Fast-path successes still emit only
+Bare repository-relative file paths (optionally quoted), exact citations, and
+uniquely defined Python symbols may resolve without endpoint configuration or
+contact. Bare paths return a preview bounded by read byte and line caps, with
+actual line coverage and truncation metadata. Fast-path successes emit only
 controller-validated citations and report `turns_used: 0` in JSON output.
+
+Validation establishes safe paths and existing line coverage, not relevance or
+minimality. The model is prompted to prefer implementation source for coding
+questions and the smallest supporting line ranges. No refinement turn is added.
 
 ## JSON Output
 
@@ -58,8 +64,7 @@ controller-validated citations and report `turns_used: 0` in JSON output.
     {
       "path": "src/api/validation.py",
       "start_line": 42,
-      "end_line": 88,
-      "reason": "request validation entrypoint"
+      "end_line": 88
     }
   ],
   "raw_locations": [
@@ -79,17 +84,26 @@ controller-validated citations and report `turns_used: 0` in JSON output.
 
 ## Exit Codes
 
-- `0`: Success.
+- `0`: Success, including partial cited results and complete empty searches.
 - `2`: CLI usage or validation error.
 - `3`: Configuration error.
 - `4`: Repository/root safety error.
 - `5`: Endpoint error.
-- `6`: Exploration failed before final answer.
+- `6`: Exploration failed before final answer, or no citations were found after
+  a tool scan budget or processing deadline was exhausted.
 
 ## Error Output
 
 Errors are written to stderr and must not include unrestricted file contents or
 secret values.
+
+Result warnings are also printed to stderr as `WARNING: message` in both text
+and JSON modes. A truncated result without warnings emits
+`WARNING: Result truncated`. Stdout retains its normal citation/JSON shape even
+when an empty budget-limited result exits 6. Budget diagnostics are
+`glob scan budget exhausted`, `grep scan budget exhausted`,
+`read scan budget exhausted`, and `grep match timed out`. Ordinary result caps
+alone do not change the exit status.
 
 Example:
 

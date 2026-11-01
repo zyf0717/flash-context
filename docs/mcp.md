@@ -72,5 +72,10 @@ source snippets, or a structured error. See the
 [MCP contract](../specs/001-flash-context-explorer/contracts/mcp.md) for schemas
 and delegation behavior.
 
+Tool discovery includes a description explaining when to explore and what
+evidence is returned. Citation objects contain `path`, `start_line`, and
+`end_line`; the unused `reason` field has been removed. Validation establishes
+safe, existing line coverage rather than semantic relevance or minimum ranges.
+
 Scan limits, incomplete-result warnings, and metadata-only external logging use
 the same [configuration](configuration.md) and core behavior as the CLI.

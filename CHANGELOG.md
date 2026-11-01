@@ -4,8 +4,31 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Resolve bare file-path queries locally with bounded previews and find unique
+  Python definitions even when many references precede them.
+- Keep literal and scoped searches from scanning unrelated directory trees while
+  preserving safety checks and existing resource limits.
+- Surface scan failures from the initial file sample and CLI result warnings.
+- Describe the MCP exploration tool during discovery and use tool-specific
+  trajectory counters instead of misleading empty read-content counts.
+
+### Migration
+
+- Citation objects no longer include the unused `reason` field. Consumers should
+  read `path`, `start_line`, and `end_line` without expecting `reason: null`.
+- The CLI now exits 6 for empty results after scan-budget exhaustion or a tool
+  processing timeout, retaining text/JSON on stdout and warnings on stderr.
+  Partial cited results and complete empty searches still exit 0.
+- Trajectory tool entries now include only their relevant counter:
+  `content_length` (read), `hit_count` (grep), or `match_count` (glob).
+
 ### Changed
 
+- Prompt the explorer to prefer implementation source for coding questions and
+  the smallest supporting citation ranges. Validation checks safe line coverage;
+  precision and relevance remain model-dependent.
 - Publish GitHub releases automatically after PyPI installation verification,
   using this changelog and the same distribution artifacts uploaded to PyPI.
 - Refresh package-index metadata during release installation retries.

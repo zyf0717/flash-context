@@ -16,10 +16,14 @@ Codebases and repositories are the current focus; the same tools explore
 documentation, configuration, and other local text files. CLI and MCP share one
 exploration core with read-only tools, path safety, and resource limits.
 Scans and regex execution are bounded; partial results report truncation.
+Citation validation checks safe paths and existing line coverage, not semantic
+relevance or minimal ranges. Citation precision depends on the explorer model.
 Optional metadata-only trajectory logs must stay outside the inspected repository.
 
 Inspired by [FastContext](https://arxiv.org/abs/2606.14066), a now-withdrawn paper
-on delegating repository exploration to a dedicated model.
+on separating repository exploration from task solving, using specialized models
+to return focused file-line evidence while reducing the coding agent's context
+and token overhead.
 
 ## Quickstart
 
@@ -49,6 +53,14 @@ Use `--format json` for structured results with source snippets, or
 lookups can resolve locally without an endpoint. See the
 [CLI contract](specs/001-flash-context-explorer/contracts/cli.md) for options,
 output schemas, and exit codes.
+
+For example, `--query 'httpx/_client.py'` returns a bounded file preview, while
+`--query 'BaseTransport'` returns its definition if unique within a complete
+Python source/stub scan. Local successes report `turns_used: 0` in JSON.
+
+Warnings go to stderr in both output formats. An empty result after scan-budget
+exhaustion exits **6** while preserving stdout; a complete empty search exits
+**0**. For large repositories, see [scan-budget tuning](docs/configuration.md#large-repositories).
 
 ## MCP
 

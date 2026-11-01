@@ -133,3 +133,6 @@ and exhausted budgets produce `truncated: true`; incomplete search is not proof
 of absence. Direct unreadable paths return `PATH_UNREADABLE`. Deny/ignore policy
 applies to lexical and resolved paths. Enumeration prunes denied directories,
 does not follow directory symlinks, and deduplicates resolved file paths.
+Literal file patterns avoid tree enumeration; wildcard searches begin at their
+longest literal directory prefix. Each literal component is budgeted and checked
+against deny/ignore rules before advancing, preserving ancestor pruning.

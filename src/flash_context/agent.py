@@ -99,8 +99,9 @@ def explore(
     )
     messages = _initial_messages(request, file_sample, settings)
     tools = tool_schemas()
-    truncated = False
-    warnings: list[str] = []
+    # A capped file sample is expected; actual scan failures must reach callers.
+    warnings = list(file_sample.warnings)
+    truncated = bool(warnings)
     last_content = ""
     evidence = EvidenceState()
 
@@ -436,6 +437,7 @@ def _finalize_result(
             truncated
             or any(x.truncated for x in raw_locations)
             or "citation verification limit reached" in warnings
+            or "read scan budget exhausted" in warnings
         ),
         warnings=warnings,
     )
@@ -448,33 +450,30 @@ def _citation_text(citations: list[Citation]) -> str:
 
 
 def _merge_adjacent_citations(citations: list[Citation]) -> list[Citation]:
-    grouped: dict[str, list[tuple[int, Citation]]] = {}
+    grouped: dict[str, list[Citation]] = {}
     path_order: list[str] = []
     non_mergeable: list[Citation] = []
-    for index, citation in enumerate(citations):
+    for citation in citations:
         if citation.start_line is None or citation.end_line is None:
             non_mergeable.append(citation)
             continue
         if citation.path not in grouped:
             grouped[citation.path] = []
             path_order.append(citation.path)
-        grouped[citation.path].append((index, citation))
+        grouped[citation.path].append(citation)
 
     merged: list[Citation] = []
     for path in path_order:
         ranges = sorted(
             grouped[path],
             key=lambda item: (
-                item[1].start_line or 0,
-                item[1].end_line or 0,
+                item.start_line or 0,
+                item.end_line or 0,
             ),
         )
         current_start: int | None = None
         current_end: int | None = None
-        current_reason: str | None = None
-        current_reason_index: int | None = None
-
-        for index, citation in ranges:
+        for citation in ranges:
             start = citation.start_line
             end = citation.end_line
             if start is None or end is None:
@@ -482,27 +481,18 @@ def _merge_adjacent_citations(citations: list[Citation]) -> list[Citation]:
             if current_start is None or current_end is None:
                 current_start = start
                 current_end = end
-                current_reason = citation.reason
-                current_reason_index = index if citation.reason else None
                 continue
 
             if start <= current_end + 1:
                 current_end = max(current_end, end)
-                if citation.reason and (
-                    current_reason_index is None or index < current_reason_index
-                ):
-                    current_reason = citation.reason
-                    current_reason_index = index
                 continue
 
-            merged.append(Citation(path, current_start, current_end, current_reason))
+            merged.append(Citation(path, current_start, current_end))
             current_start = start
             current_end = end
-            current_reason = citation.reason
-            current_reason_index = index if citation.reason else None
 
         if current_start is not None and current_end is not None:
-            merged.append(Citation(path, current_start, current_end, current_reason))
+            merged.append(Citation(path, current_start, current_end))
 
     merged.extend(non_mergeable)
     return merged
@@ -562,6 +552,33 @@ def _try_exact_fast_path(
     repo_root: Path,
     settings: Settings,
 ) -> ExploreResult | None:
+    bare_path = request.query.strip()
+    if len(bare_path) >= 2 and bare_path[0] in "`'\"" and bare_path[-1] == bare_path[0]:
+        bare_path = bare_path[1:-1]
+    if re.fullmatch(r"(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+", bare_path):
+        try:
+            observation = read_file(
+                repo_root=repo_root,
+                path=bare_path,
+                end_line=settings.max_read_lines,
+                max_bytes=settings.max_read_bytes,
+                preview=True,
+                ignore=settings.ignore,
+                limits=settings.limits,
+            )
+        except ExplorerError:
+            pass  # Missing, empty, or unsafe paths retain normal model routing.
+        else:
+            return _finalize_result(
+                request=request,
+                repo_root=repo_root,
+                settings=settings,
+                answer="",
+                citations=_citations_from_reads([observation]),
+                turns_used=0,
+                truncated=observation.truncated,
+                warnings=list(observation.warnings),
+            )
     if not _is_exact_lookup(request.query):
         return None
     evidence = EvidenceState()
@@ -748,7 +765,6 @@ def _exact_matches_in_file(
         grep_result,
         target=target,
         allow_assignment=allow_assignment,
-        definitions_only=False,
     )
     return citations if 0 < len(citations) <= MAX_FINAL_CITATIONS else []
 
@@ -759,32 +775,28 @@ def _unique_definition_citation(
     settings: Settings,
     symbol: str,
 ) -> Citation | None:
-    grep_result = _grep_exact_target(
+    definition_pattern = rf"^\s*(?:async\s+def|def|class)\s+{re.escape(symbol)}\b"
+    grep_result = repo_grep(
         repo_root=repo_root,
-        settings=settings,
-        target=symbol,
+        pattern=definition_pattern,
         glob="**/*.py",
+        max_results=2,
+        ignore=settings.ignore,
+        limits=settings.limits,
     )
-    pyi_result = _grep_exact_target(
+    pyi_result = repo_grep(
         repo_root=repo_root,
-        settings=settings,
-        target=symbol,
+        pattern=definition_pattern,
         glob="**/*.pyi",
+        max_results=2,
+        ignore=settings.ignore,
+        limits=settings.limits,
     )
-    citations = _citations_for_target_hits(
-        grep_result,
-        target=symbol,
-        allow_assignment=False,
-        definitions_only=True,
-    )
-    citations.extend(
-        _citations_for_target_hits(
-            pyi_result,
-            target=symbol,
-            allow_assignment=False,
-            definitions_only=True,
-        )
-    )
+    citations = [
+        Citation(hit.path, hit.line, hit.line)
+        for result in (grep_result, pyi_result)
+        for hit in result.hits
+    ]
     if grep_result.truncated or pyi_result.truncated or len(citations) > 1:
         return None
     return citations[0] if len(citations) == 1 else None
@@ -812,7 +824,6 @@ def _citations_for_target_hits(
     *,
     target: str,
     allow_assignment: bool,
-    definitions_only: bool,
 ) -> list[Citation]:
     citations: list[Citation] = []
     for hit in observation.hits:
@@ -820,7 +831,6 @@ def _citations_for_target_hits(
             hit.text,
             target=target,
             allow_assignment=allow_assignment,
-            definitions_only=definitions_only,
         ):
             citations.append(Citation(hit.path, hit.line, hit.line))
     return citations
@@ -831,14 +841,11 @@ def _line_matches_target(
     *,
     target: str,
     allow_assignment: bool,
-    definitions_only: bool,
 ) -> bool:
     escaped = re.escape(target)
     definition_pattern = rf"^\s*(?:async\s+def|def|class)\s+{escaped}\b"
     if re.search(definition_pattern, line):
         return True
-    if definitions_only:
-        return False
     if allow_assignment and re.search(rf"^\s*{escaped}\s*(?::|=)", line):
         return True
     return bool(re.search(rf"\b{escaped}\b", line))
@@ -862,6 +869,7 @@ def _validated_citations_from_content(
         repo_root=repo_root,
         settings=settings,
         evidence=evidence,
+        warnings=warnings,
     )
     if not validated:
         _append_warning_once(warnings, "invalid citation rejected")
@@ -874,6 +882,7 @@ def _validate_citations(
     repo_root: Path,
     settings: Settings,
     evidence: EvidenceState,
+    warnings: list[str],
 ) -> list[Citation]:
     validated: list[Citation] = []
     for citation in citations[:16]:
@@ -888,6 +897,7 @@ def _validate_citations(
             repo_root=repo_root,
             settings=settings,
             evidence=evidence,
+            warnings=warnings,
         )
         if verified is not None:
             validated.append(verified)
@@ -909,7 +919,6 @@ def _normalize_citation(citation: Citation) -> Citation | None:
         path=citation.path,
         start_line=citation.start_line,
         end_line=citation.end_line,
-        reason=citation.reason,
     )
 
 
@@ -961,6 +970,7 @@ def _verify_citation_by_read(
     repo_root: Path,
     settings: Settings,
     evidence: EvidenceState,
+    warnings: list[str],
 ) -> Citation | None:
     if citation.start_line is None or citation.end_line is None:
         return None
@@ -974,13 +984,16 @@ def _verify_citation_by_read(
             ignore=settings.ignore,
             limits=settings.limits,
         )
-    except ExplorerError:
+    except ExplorerError as exc:
+        if exc.code == "TOOL_LIMIT_EXCEEDED":
+            _append_warning_once(warnings, "read scan budget exhausted")
         return None
+    for warning in observation.warnings:
+        _append_warning_once(warnings, warning)
     verified = Citation(
         path=observation.path or citation.path,
         start_line=citation.start_line,
         end_line=citation.end_line,
-        reason=citation.reason,
     )
     if verified.path != citation.path:
         return None
@@ -1232,6 +1245,11 @@ def _initial_messages(
                 "tool calls in the same turn. "
                 "For exact symbol, function, or class names, use repo_grep "
                 "before reading broad file ranges. "
+                "For implementation questions, prefer implementation source over "
+                "documentation or Markdown; use documentation when requested or "
+                "needed to support the answer. Cite the smallest line ranges "
+                "that support the answer, rather than whole files or classes "
+                "when a smaller function or region suffices. "
                 f"Use read_file line ranges of at most {settings.max_read_lines} "
                 "lines unless no narrower range is known. "
                 f"{output_contract}"
@@ -1464,7 +1482,11 @@ def _execute_tool_call(
                 limits=settings.limits,
             )
     except ExplorerError as exc:
-        return ToolObservation.from_error(exc, tool_call_id=tool_call.id)
+        observation = ToolObservation.from_error(exc, tool_call_id=tool_call.id)
+        if exc.code == "TOOL_LIMIT_EXCEEDED":
+            observation.truncated = True
+            observation.warnings.append("read scan budget exhausted")
+        return observation
     raise AssertionError(f"unhandled tool: {tool_call.name}")
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -52,7 +53,6 @@ def test_mcp_handler_delegates_to_core(tmp_path: Path) -> None:
             "path": "src/api/validation.py",
             "start_line": 1,
             "end_line": 1,
-            "reason": None,
         }
     ]
     assert result["raw_locations"] == [
@@ -169,7 +169,6 @@ def test_mcp_handler_returns_core_normalized_citation_result(
             "path": "src/api/validation.py",
             "start_line": 1,
             "end_line": 2,
-            "reason": None,
         }
     ]
     assert result["raw_locations"] == [
@@ -216,3 +215,13 @@ def _mock_transport(responses: Iterator[dict[str, object]]) -> httpx.MockTranspo
         return httpx.Response(200, json=next(responses))
 
     return httpx.MockTransport(handler)
+
+
+def test_real_mcp_discovery_describes_repository_exploration() -> None:
+    pytest.importorskip("mcp")
+    tools = asyncio.run(mcp_server.create_server().list_tools())
+    assert [tool.name for tool in tools] == ["explore_repository"]
+    assert tools[0].inputSchema["required"] == ["query"]
+    description = tools[0].description.lower()
+    assert "read-only" in description
+    assert "citations" in description and "snippets" in description

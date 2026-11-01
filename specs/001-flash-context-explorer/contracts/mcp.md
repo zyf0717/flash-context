@@ -28,6 +28,8 @@ Options:
 
 Purpose: Explore a local repository using the same core as the CLI and return
 compact file-line evidence for a focused coding question.
+The discovered tool description must explain its read-only exploration use and
+the returned citations and bounded source snippets.
 
 Input schema:
 
@@ -57,8 +59,7 @@ Output schema:
     {
       "path": "src/api/validation.py",
       "start_line": 42,
-      "end_line": 88,
-      "reason": "request validation entrypoint"
+      "end_line": 88
     }
   ],
   "raw_locations": [
