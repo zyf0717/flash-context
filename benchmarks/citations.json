@@ -1,0 +1,27 @@
+[
+  {
+    "name": "httpx-sync-redirects",
+    "root": "tests/fixtures/httpx_0_28_1",
+    "path": "httpx/_client.py",
+    "symbols": [
+      "BaseClient._build_redirect_request",
+      "BaseClient._redirect_method",
+      "BaseClient._redirect_url",
+      "BaseClient._redirect_headers",
+      "BaseClient._redirect_stream",
+      "Client._send_handling_redirects"
+    ],
+    "query": "How does synchronous Client build and follow redirects, including method, URL, header and stream adjustments?",
+    "sha256": "c43f941baefe58c91e96d00039e1868fe719d91453026d7db1647194563bff8d"
+  },
+  {
+    "name": "request-validation",
+    "root": "tests/fixtures/sample_repo",
+    "path": "src/api/validation.py",
+    "symbols": [
+      "validate_request"
+    ],
+    "query": "Where is request payload validation implemented?",
+    "sha256": "677648e0ae371e294ce4326c095c08fb19b2cd76a584fc67c701a0f7413020c4"
+  }
+]
