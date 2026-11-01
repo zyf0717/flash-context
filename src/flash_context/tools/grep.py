@@ -5,7 +5,7 @@ from pathlib import Path
 import regex
 
 from flash_context.tools.safety import PathSafety, ScanBudget, ScanLimits
-from flash_context.types import ExplorerError, SearchHit, ToolObservation
+from flash_context.types import Diagnostic, ExplorerError, SearchHit, ToolObservation
 
 MAX_HIT_TEXT = 240
 
@@ -56,13 +56,8 @@ def repo_grep(
                             while raw and not raw.endswith(b"\n"):
                                 raw = handle.readline(65536)
                                 budget.consume(size=len(raw))
-                            if (
-                                "search skipped an oversized line"
-                                not in budget.warnings
-                            ):
-                                budget.warnings.append(
-                                    "search skipped an oversized line"
-                                )
+                            if Diagnostic.OVERSIZED_LINE not in budget.warnings:
+                                budget.warnings.append(Diagnostic.OVERSIZED_LINE)
                             continue
                         line = raw.decode("utf-8", errors="replace")
                         if "\x00" in line or not compiled.search(
@@ -83,14 +78,14 @@ def repo_grep(
             except TimeoutError:
                 raise
             except OSError:
-                if "search skipped an unreadable file" not in budget.warnings:
-                    budget.warnings.append("search skipped an unreadable file")
+                if Diagnostic.UNREADABLE_FILE not in budget.warnings:
+                    budget.warnings.append(Diagnostic.UNREADABLE_FILE)
     except TimeoutError:
-        budget.warnings.append("grep match timed out")
+        budget.warnings.append(Diagnostic.GREP_TIMEOUT)
     except ExplorerError as exc:
         if exc.code != "TOOL_LIMIT_EXCEEDED":
             raise
-        budget.warnings.append("grep scan budget exhausted")
+        budget.warnings.append(Diagnostic.GREP_LIMIT)
     return ToolObservation(
         hits=hits, truncated=bool(budget.warnings), warnings=budget.warnings
     )

@@ -4,6 +4,48 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-01
+
+### Added
+
+- Bundled parsers for controller-owned symbol and line-anchor boundaries, with
+  citation precision metadata and an opt-in pinned quality benchmark.
+- Configurable per-citation, total-line and parser-byte limits (120, 240 and
+  1 MiB by default), supporting the existing configuration precedence.
+
+### Fixed
+
+- Keep citation repair feedback local to each model turn; successful repair after
+  a tool-only turn no longer reports a precision failure. Preserve overlapping
+  anchor mappings, LF/CRLF source lines, and snippet/metadata source snapshots.
+- Report parser input/deadline limits explicitly and use diagnostic identities
+  for truncation and CLI exit behavior.
+
+### Changed
+
+- Consolidate contracts under `docs/`, remove planning scaffolds and separate
+  agent instructions, and keep contributor guidance in `CONTRIBUTING.md`.
+  Simplify query routing, configuration, loop finalization, test fixtures,
+  live evaluation, and CI jobs.
+- Benchmark against independent reviewed ranges, recording package/parser
+  versions and effective settings. Live probes share the same pinned cases.
+
+### Migration
+
+- Models must propose symbol or single-line anchors; model-selected ranges receive
+  bounded correction feedback. Public line labels remain unchanged. Adjacent
+  definitions remain separate, and the final citation cap increases to twelve.
+- Unselected read observations no longer become final citations. Consumers should
+  accept the additive precision object. Explicit user ranges retain old behavior.
+- Parser dependencies ship with installation; exploration does not download grammars.
+- CLI `--no-citation` now enables prose; `--citation` remains the default.
+  Remove the previously ignored `explorer.citation` YAML key. Python callers
+  should stop passing the ignored `load_settings(repo_root=...)` argument or
+  the adapter-only `ExploreRequest.format` field. `Citation` now requires both
+  line bounds; typed warnings use `Diagnostic` members and serialize as strings.
+- Empty results after parser input/deadline exhaustion exit 6, matching scan
+  exhaustion. Ordinary syntax fallback and complete empty results still exit 0.
+
 ## [0.3.2] - 2026-11-01
 
 ### Fixed

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from time import monotonic
 
-from flash_context.types import ExplorerError
+from flash_context.types import Diagnostic, ExplorerError
 
 DEFAULT_DENY_PATTERNS = (
     ".git/**",
@@ -169,9 +169,9 @@ class PathSafety:
                         if exc.code == "TOOL_LIMIT_EXCEEDED":
                             raise
                         if exc.code not in {"PATH_DENIED", "PATH_OUTSIDE_ROOT"}:
-                            budget.warnings.append("search skipped an unreadable entry")
+                            budget.warnings.append(Diagnostic.UNREADABLE_ENTRY)
             except OSError:
-                budget.warnings.append("search skipped an unreadable directory")
+                budget.warnings.append(Diagnostic.UNREADABLE_DIRECTORY)
 
         directory = self.repo_root
         parts = Path(pattern).parts
@@ -195,9 +195,9 @@ class PathSafety:
             if exc.code == "TOOL_LIMIT_EXCEEDED":
                 raise
             if exc.code not in {"PATH_DENIED", "PATH_OUTSIDE_ROOT"}:
-                budget.warnings.append("search skipped an unreadable entry")
+                budget.warnings.append(Diagnostic.UNREADABLE_ENTRY)
         except OSError:
-            budget.warnings.append("search skipped an unreadable directory")
+            budget.warnings.append(Diagnostic.UNREADABLE_DIRECTORY)
 
 
 def _matches_patterns(rel_path: str, patterns: tuple[str, ...]) -> bool:
@@ -240,7 +240,7 @@ class ScanBudget:
     started: float = field(default_factory=monotonic)
     bytes_read: int = 0
     entries: int = 0
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[Diagnostic] = field(default_factory=list)
 
     def remaining_seconds(self) -> float:
         return self.limits.tool_timeout_seconds - (monotonic() - self.started)

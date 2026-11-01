@@ -26,7 +26,6 @@ def explore_repository_handler(
     root = Path(repo_root) if repo_root is not None else Path.cwd()
     try:
         effective_settings = settings or load_settings(
-            repo_root=root,
             overrides=SettingsOverrides(max_turns=max_turns),
         )
         if max_turns is not None and settings is not None:
@@ -36,7 +35,6 @@ def explore_repository_handler(
             repo_root=root,
             max_turns=effective_settings.max_turns,
             citation=True if citation is None else citation,
-            format="json",
         )
         return core(request, effective_settings).to_dict()
     except ExplorerError as exc:

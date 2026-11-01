@@ -1,110 +1,24 @@
-# Architecture and scope
-
-`flash-context` is a CLI-first context explorer for AI agents, currently focused
-on codebases and repositories. Its local tools also apply to documentation,
-configuration, and other text files within a selected root. CLI and MCP adapters
-call a shared core, which talks to an OpenAI-compatible endpoint and executes
-root-scoped, read-only local tools.
+# Architecture
 
 ```text
-CLI / MCP adapter → shared exploration core → model endpoint
-                             ↓
-                  read_file / repo_glob / repo_grep
+CLI / MCP → shared exploration core → OpenAI-compatible chat completions
+                         ↓
+              read_file / repo_glob / repo_grep
 ```
 
-## Safety and evidence validation
+The adapters parse requests and render the shared result. The core owns query
+routing, bounded model turns, and evidence selection. `queries.py` classifies
+intent; `execution.py` validates messages and runs local batches. Citation
+resolution owns syntax boundaries and a request-local source cache. Filesystem
+safety is centralized in `tools/safety.py`; local tools are read-only. Endpoint
+requests are serial; independent local calls in one turn may run concurrently.
 
-Scans and regex execution are bounded; partial results report truncation.
-Citation validation checks safe paths and existing line coverage. Exact-symbol
-lookups also require the case-sensitive whole token inside each cited range,
-including fallback evidence. Semantic relevance and minimal ranges remain
-model-dependent; token presence does not prove a definition. See
-[exact-symbol evidence](configuration.md#exact-symbol-evidence) for diagnostics.
+Validation establishes safe paths, source coverage, syntax boundaries, and
+whole-token presence for exact queries. Semantic relevance remains the model's
+judgment. The [shared contract](contracts.md) defines evidence and safety rules;
+[configuration](configuration.md) defines settings and budgets. CLI and MCP
+behavior live in their respective docs. Contributor guidance is in
+[CONTRIBUTING.md](../CONTRIBUTING.md).
 
-Implementation queries continue past documentation-only citations within the
-turn budget. Documentation-only fallbacks carry incomplete-result metadata and
-warnings. Build outputs such as `dist/` remain excluded; inspect a source
-checkout for implementation evidence. See
-[exploration progress and evidence](configuration.md#exploration-progress-and-evidence)
-for fallback behavior.
-
-Optional trajectory logs contain metadata only and must stay outside the
-inspected repository. See
-[local execution budgets and diagnostics](configuration.md#local-execution-budgets-and-diagnostics)
-for limits, truncation, and logging settings.
-
-## Implementation status
-
-This repository has the initial Python 3.13+ implementation for spec `001`:
-CLI, shared exploration core, read-only repository tools, OpenAI-compatible
-chat-completions client, optional trajectory logging, and a thin MCP adapter.
-It also includes spec `002` hardening for deterministic controller-owned
-finalization and citation-mode rendering, plus spec `003` latency controls for
-bounded endpoint prompt growth, and spec `004` same-turn parallel local tool
-execution. Spec `005` adds a deterministic exact path/symbol fast path for
-trivial evidence lookups. Spec `006` fixes configuration ownership to
-project-root `config.yaml` plus `.env`/environment overrides. Spec `007` adds
-raw source snippets for validated, merged citation ranges. Spec `008` adds
-package validation and tag-driven TestPyPI/PyPI releases.
-
-Primary planning artifacts:
-
-- [Spec Kit feature spec](../specs/001-flash-context-explorer/spec.md)
-- [Implementation plan](../specs/001-flash-context-explorer/plan.md)
-- [Task breakdown](../specs/001-flash-context-explorer/tasks.md)
-- [Deterministic explorer harness](../specs/002-deterministic-explorer-harness/spec.md)
-- [Latency-bounded explorer harness](../specs/003-latency-bounded-explorer-harness/spec.md)
-- [FastContext-compatible parallel tool executor](../specs/004-fastcontext-parallel-tool-executor/spec.md)
-- [Exact path/symbol fast path](../specs/005-exact-path-symbol-fast-path/spec.md)
-- [Project-root YAML and env configuration](../specs/006-project-root-yaml-dotenv-config/spec.md)
-- [Raw location evidence with merged ranges](../specs/007-raw-location-payload/spec.md)
-- [PyPI release pipeline](../specs/008-pypi-release/spec.md)
-- [Implementation order](implementation-order.md)
-
-## FastContext inspiration
-
-The exploration design draws on FastContext's delegated explorer approach:
-
-- Delegated repository exploration: CLI/MCP call a focused explorer core that
-  returns evidence for a downstream coding agent.
-- Read-only tools: the only model-callable repository tools are
-  `read_file`, `repo_glob`, and `repo_grep`, corresponding to FastContext's
-  `Read`, `Glob`, and `Grep`.
-- Same-turn parallel tool calling: independent local tool calls from one model
-  message execute concurrently, while model endpoint requests remain serial.
-- Compact evidence: citation mode renders controller-validated `path:start-end`
-  lines, with the model prompted toward a `<final_answer>` block.
-
-The [FastContext paper](https://arxiv.org/abs/2606.14066) has been withdrawn, and
-its [original repository](https://github.com/microsoft/fastcontext) is no longer
-publicly available. These are historical design references; the endpoint
-contract is OpenAI-compatible chat completions with tool calling.
-
-## Scope
-
-In scope:
-
-- Local, read-only exploration of codebases, documentation, and other text files.
-- Root-scoped `read_file`, `repo_glob`, and `repo_grep` tools.
-- OpenAI-compatible chat completion loop with bounded tool observations.
-- Same-turn concurrent execution for independent local tool calls.
-- CLI output with file paths and line-range citations.
-- MCP adapter that delegates to the CLI/core implementation.
-
-Out of scope for the MVP:
-
-- Repository mutation.
-- Vector database ownership or embedding/model serving.
-- MCP-first `context_search`, `context_pack`, and `context_get` tools.
-- OKF bundle output.
-
-Spec `009` hardens lexical/resolved path checks, diagnostic privacy, bounded
-local execution, conservative exact routing, and endpoint termination handling.
-
-Spec [010](../specs/010-explorer-progress-and-evidence/spec.md) reuses duplicate
-observations while executing fresh sibling calls,
-continues implementation queries past documentation-only citations within the
-turn budget, and labels documentation-only fallback evidence as incomplete.
-
-Spec [011](../specs/011-symbol-evidence-validation/spec.md) preserves Python
-preflight outcomes and enforces exact-token evidence across symbol lookups.
+FastContext's delegated exploration approach inspired the project. The supported
+endpoint contract is OpenAI-compatible chat completions with tool calls.

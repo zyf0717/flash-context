@@ -1,6 +1,6 @@
 [project]
 name = "flash-context"
-version = "0.3.2"
+version = "0.4.0"
 description = "Read-only context exploration and retrieval for AI agents, starting with codebases and repositories."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -19,6 +19,8 @@ dependencies = [
   "httpx>=0.28.0",
   "PyYAML>=6.0.0",
   "regex>=2026.9.29",
+  "tree-sitter==0.25.2",
+  "tree-sitter-language-pack==0.13.0",
 ]
 
 [project.urls]
@@ -60,12 +62,14 @@ include = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 norecursedirs = ["tests/fixtures"]
 markers = [
   "e2e: endpoint-backed opt-in end-to-end tests",
 ]
 
 [tool.ruff]
+extend-exclude = ["tests/fixtures/httpx_0_28_1"]
 line-length = 88
 target-version = "py313"
 

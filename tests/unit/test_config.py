@@ -38,7 +38,7 @@ def test_config_defaults_include_latency_controls(
 ) -> None:
     _clear_config_env(monkeypatch, tmp_path)
 
-    settings = load_settings(repo_root=tmp_path)
+    settings = load_settings()
 
     assert settings.timeout_seconds == 120.0
     assert settings.max_observation_chars == 6000
@@ -69,7 +69,7 @@ def test_config_discovery_requires_source_checkout(
     )
     monkeypatch.chdir(tmp_path)
 
-    settings = load_settings(repo_root=tmp_path)
+    settings = load_settings()
 
     assert settings.model == ("yaml-model" if source_checkout else "")
     assert settings.base_url == ("http://dotenv/v1" if source_checkout else "")
@@ -117,7 +117,6 @@ FLASH_CONTEXT_TEMPERATURE=0.2
     monkeypatch.setenv("FLASH_CONTEXT_TEMPERATURE", "0.1")
 
     settings = load_settings(
-        repo_root=tmp_path,
         overrides=SettingsOverrides(
             max_turns=5,
             max_read_bytes=20,
@@ -164,7 +163,7 @@ model:
     )
     monkeypatch.chdir(repo)
 
-    settings = load_settings(repo_root=repo)
+    settings = load_settings()
 
     assert settings.base_url == ""
     assert settings.model == ""
@@ -196,7 +195,7 @@ model:
     )
     monkeypatch.chdir(caller)
 
-    settings = load_settings(repo_root=repo)
+    settings = load_settings()
 
     assert settings.base_url == ""
     assert settings.model == ""
@@ -222,7 +221,7 @@ explorer:
     )
     monkeypatch.chdir(caller)
 
-    settings = load_settings(repo_root=repo)
+    settings = load_settings()
 
     assert settings.traj_dir == project_root / ".flash-context"
 
@@ -243,7 +242,7 @@ explorer:
     )
     monkeypatch.setenv("FLASH_CONTEXT_TRAJ_DIR", "env-traj")
 
-    settings = load_settings(repo_root=tmp_path / "target")
+    settings = load_settings()
 
     assert settings.traj_dir == Path("env-traj")
 
@@ -262,7 +261,7 @@ FLASH_CONTEXT_MAX_TURNS=4 # local override
         encoding="utf-8",
     )
 
-    settings = load_settings(repo_root=tmp_path)
+    settings = load_settings()
 
     assert settings.base_url == "http://dotenv/v1"
     assert settings.model == "dotenv-model"
@@ -285,7 +284,7 @@ model:
     )
     monkeypatch.setenv("FLASH_CONTEXT_CONFIG", str(external))
 
-    settings = load_settings(repo_root=tmp_path)
+    settings = load_settings()
 
     assert settings.base_url == ""
     assert settings.model == ""
@@ -299,7 +298,7 @@ def test_invalid_dotenv_line_raises_config_error(
     (tmp_path / ".env").write_text("not-an-assignment\n", encoding="utf-8")
 
     with pytest.raises(ExplorerError) as exc_info:
-        load_settings(repo_root=tmp_path / "target")
+        load_settings()
 
     assert exc_info.value.code == "CONFIG_INVALID"
 
@@ -312,7 +311,7 @@ def test_invalid_integer_env_raises_config_error(
     monkeypatch.setenv("FLASH_CONTEXT_MAX_TURNS", "nope")
 
     with pytest.raises(ExplorerError) as exc_info:
-        load_settings(repo_root=tmp_path)
+        load_settings()
 
     assert exc_info.value.code == "CONFIG_INVALID"
 
@@ -325,7 +324,7 @@ def test_max_parallel_tools_must_be_positive(
     monkeypatch.setenv("FLASH_CONTEXT_MAX_PARALLEL_TOOLS", "0")
 
     with pytest.raises(ExplorerError) as exc_info:
-        load_settings(repo_root=tmp_path)
+        load_settings()
 
     assert exc_info.value.code == "CONFIG_INVALID"
     assert exc_info.value.details == {"max_parallel_tools": 0}

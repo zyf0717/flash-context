@@ -1,6 +1,7 @@
 explorer:
   max_turns: 6
-  citation: true
+  max_citation_lines: 120
+  max_total_citation_lines: 240
   ignore:
     - ".git"
     - ".venv"
@@ -20,6 +21,7 @@ model:
 
 tools:
   max_read_bytes: 12000
+  max_parse_bytes: 1048576
   max_grep_results: 50
   max_observation_chars: 6000
   max_read_lines: 120

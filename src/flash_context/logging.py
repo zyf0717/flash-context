@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from flash_context.types import (
+    Diagnostic,
     ExploreRequest,
     ExplorerError,
     ExploreResult,
@@ -87,4 +88,4 @@ class TrajectoryRecorder:
             path.write_text(json.dumps(self._data, indent=2), encoding="utf-8")
         except OSError:
             if result is not None:
-                result.warnings.append("trajectory log could not be written")
+                result.warnings.append(Diagnostic.LOG_FAILED)

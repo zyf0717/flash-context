@@ -28,6 +28,9 @@ class Settings:
     model: str = ""
     api_key: str | None = None
     max_turns: int = 6
+    max_citation_lines: int = 120
+    max_total_citation_lines: int = 240
+    max_parse_bytes: int = 1_048_576
     max_read_bytes: int = 12_000
     max_grep_results: int = 50
     traj_dir: Path | None = None
@@ -69,6 +72,9 @@ class SettingsOverrides:
     model: str | None = None
     api_key: str | None = None
     max_turns: int | None = None
+    max_citation_lines: int | None = None
+    max_total_citation_lines: int | None = None
+    max_parse_bytes: int | None = None
     max_read_bytes: int | None = None
     max_grep_results: int | None = None
     traj_dir: Path | None | _Unset = _Unset.VALUE
@@ -87,10 +93,8 @@ class SettingsOverrides:
 
 def load_settings(
     *,
-    repo_root: Path | None = None,
     overrides: SettingsOverrides | None = None,
 ) -> Settings:
-    _ = repo_root
     settings = Settings()
     project_root = _project_root()
     if project_root is not None:
@@ -175,125 +179,38 @@ def _apply_yaml(settings: Settings, path: Path, *, project_root: Path) -> Settin
     tools = _section(data, "tools")
     traj_dir = explorer.get("traj_dir", data.get("traj_dir", settings.traj_dir))
 
+    sections = {"model": model, "explorer": explorer, "tools": tools}
+    values: dict[str, Any] = {
+        name: parser(sections[group].get(name, getattr(settings, name)), name)
+        for name, (group, parser) in _SCALARS.items()
+    }
     return replace(
         settings,
+        **values,
         base_url=str(model.get("base_url", settings.base_url) or ""),
         model=str(model.get("model", settings.model) or ""),
         api_key=_optional_str(model.get("api_key", settings.api_key)),
-        max_turns=_int_value(
-            explorer.get("max_turns", settings.max_turns), "max_turns"
-        ),
-        max_read_bytes=_int_value(
-            tools.get("max_read_bytes", settings.max_read_bytes), "max_read_bytes"
-        ),
-        max_grep_results=_int_value(
-            tools.get("max_grep_results", settings.max_grep_results),
-            "max_grep_results",
-        ),
-        timeout_seconds=_float_value(
-            model.get("timeout_seconds", settings.timeout_seconds),
-            "timeout_seconds",
-        ),
-        max_observation_chars=_int_value(
-            tools.get("max_observation_chars", settings.max_observation_chars),
-            "max_observation_chars",
-        ),
-        max_read_lines=_int_value(
-            tools.get("max_read_lines", settings.max_read_lines),
-            "max_read_lines",
-        ),
-        max_parallel_tools=_int_value(
-            tools.get("max_parallel_tools", settings.max_parallel_tools),
-            "max_parallel_tools",
-        ),
-        max_completion_tokens=_int_value(
-            model.get("max_completion_tokens", settings.max_completion_tokens),
-            "max_completion_tokens",
-        ),
-        temperature=_float_value(
-            model.get("temperature", settings.temperature),
-            "temperature",
-        ),
         traj_dir=_optional_project_path(traj_dir, project_root=project_root),
-        max_scan_bytes=_int_value(
-            tools.get("max_scan_bytes", settings.max_scan_bytes), "max_scan_bytes"
-        ),
-        max_scan_entries=_int_value(
-            tools.get("max_scan_entries", settings.max_scan_entries), "max_scan_entries"
-        ),
-        tool_timeout_seconds=_float_value(
-            tools.get("tool_timeout_seconds", settings.tool_timeout_seconds),
-            "tool_timeout_seconds",
-        ),
-        max_tool_calls_per_turn=_int_value(
-            tools.get("max_tool_calls_per_turn", settings.max_tool_calls_per_turn),
-            "max_tool_calls_per_turn",
-        ),
         ignore=_str_list(explorer.get("ignore", settings.ignore), "ignore"),
     )
 
 
 def _apply_env(settings: Settings, env: Mapping[str, str | None]) -> Settings:
+    values: dict[str, Any] = {}
+    for name, (_, parser) in _SCALARS.items():
+        key = "FLASH_CONTEXT_" + name.upper()
+        if env.get(key) is not None:
+            values[name] = parser(env[key], key)
     return replace(
         settings,
-        max_tool_calls_per_turn=_env_int(
-            env,
-            "FLASH_CONTEXT_MAX_TOOL_CALLS_PER_TURN",
-            settings.max_tool_calls_per_turn,
-        ),
-        tool_timeout_seconds=_env_float(
-            env, "FLASH_CONTEXT_TOOL_TIMEOUT_SECONDS", settings.tool_timeout_seconds
-        ),
-        max_scan_entries=_env_int(
-            env, "FLASH_CONTEXT_MAX_SCAN_ENTRIES", settings.max_scan_entries
-        ),
-        max_scan_bytes=_env_int(
-            env, "FLASH_CONTEXT_MAX_SCAN_BYTES", settings.max_scan_bytes
-        ),
+        **values,
         base_url=env.get("FLASH_CONTEXT_BASE_URL") or settings.base_url,
         model=env.get("FLASH_CONTEXT_MODEL") or settings.model,
         api_key=env.get("FLASH_CONTEXT_API_KEY", settings.api_key),
-        max_turns=_env_int(env, "FLASH_CONTEXT_MAX_TURNS", settings.max_turns),
-        max_read_bytes=_env_int(
-            env, "FLASH_CONTEXT_MAX_READ_BYTES", settings.max_read_bytes
-        ),
-        max_grep_results=_env_int(
-            env, "FLASH_CONTEXT_MAX_GREP_RESULTS", settings.max_grep_results
-        ),
         traj_dir=(
             _optional_path(env["FLASH_CONTEXT_TRAJ_DIR"])
             if "FLASH_CONTEXT_TRAJ_DIR" in env
             else settings.traj_dir
-        ),
-        timeout_seconds=_env_float(
-            env,
-            "FLASH_CONTEXT_TIMEOUT_SECONDS",
-            settings.timeout_seconds,
-        ),
-        max_observation_chars=_env_int(
-            env,
-            "FLASH_CONTEXT_MAX_OBSERVATION_CHARS",
-            settings.max_observation_chars,
-        ),
-        max_read_lines=_env_int(
-            env,
-            "FLASH_CONTEXT_MAX_READ_LINES",
-            settings.max_read_lines,
-        ),
-        max_completion_tokens=_env_int(
-            env,
-            "FLASH_CONTEXT_MAX_COMPLETION_TOKENS",
-            settings.max_completion_tokens,
-        ),
-        max_parallel_tools=_env_int(
-            env,
-            "FLASH_CONTEXT_MAX_PARALLEL_TOOLS",
-            settings.max_parallel_tools,
-        ),
-        temperature=_env_float(
-            env,
-            "FLASH_CONTEXT_TEMPERATURE",
-            settings.temperature,
         ),
     )
 
@@ -312,44 +229,19 @@ def _apply_overrides(settings: Settings, overrides: SettingsOverrides) -> Settin
 
 
 def _validate_settings(settings: Settings) -> None:
-    if (
-        not math.isfinite(settings.tool_timeout_seconds)
-        or settings.tool_timeout_seconds <= 0
-    ):
-        raise ExplorerError(
-            "CONFIG_INVALID", "tool_timeout_seconds must be finite and positive"
-        )
-    int_fields = {
-        "max_scan_bytes": settings.max_scan_bytes,
-        "max_scan_entries": settings.max_scan_entries,
-        "max_tool_calls_per_turn": settings.max_tool_calls_per_turn,
-        "max_turns": settings.max_turns,
-        "max_read_bytes": settings.max_read_bytes,
-        "max_grep_results": settings.max_grep_results,
-        "max_observation_chars": settings.max_observation_chars,
-        "max_read_lines": settings.max_read_lines,
-        "max_completion_tokens": settings.max_completion_tokens,
-        "max_parallel_tools": settings.max_parallel_tools,
-    }
-    for name, value in int_fields.items():
-        if value <= 0:
+    for name in _SCALARS:
+        value = getattr(settings, name)
+        if (
+            not math.isfinite(value)
+            or value < 0
+            or (value == 0 and name != "temperature")
+        ):
+            requirement = "non-negative" if name == "temperature" else "positive"
             raise ExplorerError(
                 "CONFIG_INVALID",
-                f"{name} must be positive",
+                f"{name} must be {requirement} and finite",
                 details={name: value},
             )
-    if not math.isfinite(settings.timeout_seconds) or settings.timeout_seconds <= 0:
-        raise ExplorerError(
-            "CONFIG_INVALID",
-            "timeout_seconds must be positive",
-            details={"timeout_seconds": settings.timeout_seconds},
-        )
-    if not math.isfinite(settings.temperature) or settings.temperature < 0:
-        raise ExplorerError(
-            "CONFIG_INVALID",
-            "temperature must be non-negative",
-            details={"temperature": settings.temperature},
-        )
 
 
 def _section(data: dict[str, Any], name: str) -> dict[str, Any]:
@@ -357,16 +249,6 @@ def _section(data: dict[str, Any], name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ExplorerError("CONFIG_INVALID", f"[{name}] must be a table")
     return value
-
-
-def _env_int(env: Mapping[str, str | None], name: str, default: int) -> int:
-    value = env.get(name)
-    return default if value is None else _int_value(value, name)
-
-
-def _env_float(env: Mapping[str, str | None], name: str, default: float) -> float:
-    value = env.get(name)
-    return default if value is None else _float_value(value, name)
 
 
 def _int_value(value: object, name: str) -> int:
@@ -433,3 +315,29 @@ def _read_config(path: Path) -> str:
         raise ExplorerError(
             "CONFIG_INVALID", "Configuration file could not be read"
         ) from exc
+
+
+# One mapping owns numeric config section, conversion, environment key and validation.
+_SCALARS = {
+    "max_turns": ("explorer", _int_value),
+    "max_citation_lines": ("explorer", _int_value),
+    "max_total_citation_lines": ("explorer", _int_value),
+    "timeout_seconds": ("model", _float_value),
+    "max_completion_tokens": ("model", _int_value),
+    "temperature": ("model", _float_value),
+    **{
+        name: ("tools", _int_value)
+        for name in (
+            "max_parse_bytes",
+            "max_read_bytes",
+            "max_grep_results",
+            "max_observation_chars",
+            "max_read_lines",
+            "max_parallel_tools",
+            "max_scan_bytes",
+            "max_scan_entries",
+            "max_tool_calls_per_turn",
+        )
+    },
+    "tool_timeout_seconds": ("tools", _float_value),
+}

@@ -1,8 +1,8 @@
 # Releasing
 
-`.github/workflows/ci.yml` runs Ruff, mypy, and endpoint-free tests on Python
-3.13 and 3.14 with the MCP extra for branch pushes and pull requests to `main`,
-then builds and checks clean wheel and source installs.
+`.github/workflows/ci.yml` runs Ruff and mypy once, plus endpoint-free tests on
+Python 3.13 and 3.14 with the MCP extra, for `main` pushes and pull requests to
+`main`. It then builds and checks clean wheel and source installs.
 
 A `v*` tag push triggers `.github/workflows/release.yml`, which calls the same
 CI workflow before publishing:
