@@ -250,6 +250,7 @@ def test_real_mcp_discovery_describes_repository_search() -> None:
     description = tools[0].description.lower()
     assert "read-only" in description
     assert "citations" in description and "snippets" in description
+    assert "max_turns" in description and "12" in description
 
 
 def test_real_mcp_initialization_reports_package_version() -> None:

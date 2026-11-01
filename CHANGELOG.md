@@ -18,6 +18,14 @@ User-visible changes and migration instructions for each release.
   50 to 100, and completion tokens from 512 to 4,096 per model response.
   Increase citation limits from 120 to 240 lines per citation and 600 to 1,200
   unique lines total. The default remains twelve turns.
+- Explain the `max_turns` override and focused-query guidance in MCP discovery.
+
+### Fixed
+
+- Resolve single `path#qualified.symbol` queries locally, including unique leaf
+  names and quoted anchors, before requiring an endpoint (#24). Preserve parsed
+  precision metadata and source-snapshot snippets on zero-turn results. Unresolved
+  anchors retain model fallback and parser-limit diagnostics.
 
 ### Migration
 

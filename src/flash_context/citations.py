@@ -12,6 +12,7 @@ from tree_sitter import Node, Parser
 from tree_sitter_language_pack import SupportedLanguage, get_language
 
 from flash_context.config import Settings
+from flash_context.queries import ANCHOR
 from flash_context.tools import read_file
 from flash_context.tools.safety import ScanBudget
 from flash_context.types import (
@@ -79,10 +80,6 @@ DEFINITIONS = frozenset(
         "anonymous_function",
         "protocol_declaration",
     }
-)
-PATH = r"(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+"
-ANCHOR = re.compile(
-    rf"(?<![\w./-])(?P<path>{PATH})(?:#(?P<symbol>[A-Za-z_$][\w$]*(?:[.:]+[\w$]+)*)|:(?P<line>[1-9][0-9]*)(?P<range>-[0-9]+)?)(?![\w-])"
 )
 
 

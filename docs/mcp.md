@@ -68,6 +68,8 @@ search_repository(query, repo_root?, max_turns?, citation?)
 
 `query` is required. `repo_root` defaults to the server working directory,
 `max_turns` to the effective configuration (normally 12), and `citation` to true.
+For broader questions, increase `max_turns` explicitly or split surveys into
+focused searches.
 Set `citation: false` to retain model prose. The tool delegates to the shared
 core and returns its [result or structured error](contracts.md#result), without
 CLI exit semantics. Initialization reports the flash-context package version.

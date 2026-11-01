@@ -66,7 +66,9 @@ def create_server() -> Any:
         Search read-only when implementation locations or supporting evidence
         are unknown. Return validated file-line citations and bounded source
         snippets, with warnings for incomplete search. repo_root defaults
-        to the server's working directory.
+        to the server's working directory. max_turns defaults to the configured
+        limit, normally 12. For broader questions, increase max_turns or split
+        surveys into focused searches.
         """
         return search_repository_handler(
             query=query,

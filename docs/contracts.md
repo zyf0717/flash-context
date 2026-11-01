@@ -51,6 +51,14 @@ Python preflight distinguishes unique, missing, ambiguous, and incomplete scans;
 missing means no Python definition matches, not repository-wide absence.
 Incomplete scans retain diagnostics. Adjacent local ranges may merge.
 
+A single `path#qualified.symbol` query, optionally enclosed in matching quotes or
+backticks, resolves locally through the same parser as model anchors. A leaf
+symbol name must be unique in the file. Success returns zero turns, structural
+precision metadata, and snippets from the verified source snapshot. Missing,
+ambiguous, unsupported, unsafe, or oversized anchors retain model routing;
+parser-limit diagnostics survive that fallback. Queries with surrounding prose
+or multiple symbol anchors do not use this fast path.
+
 Exact-identifier queries require the case-sensitive whole token inside each
 accepted region, including derived fallback anchors. Filenames, nearby lines,
 substrings, and a byte-capped partial token do not qualify. Assignments,
@@ -80,9 +88,10 @@ bundled and never downloaded during search.
 Defaults: 240 lines per model citation, 1200 unique file-lines total, 16 citations,
 16 candidate anchors, 1 MiB parser input per file. Cumulative parser input obeys
 `max_scan_bytes`; parsing/traversal obey tool deadlines. Explicit user ranges,
-previews, and deterministic local lookups retain read byte caps and are exempt
-from model precision budgets. Source lines follow LF boundaries, including CRLF;
-Unicode separators inside strings do not create additional lines.
+previews, and lexical local lookups retain read byte caps and are exempt
+from model precision budgets. Local symbol-anchor lookups obey parser and
+citation budgets as well as snippet byte caps. Source lines follow LF boundaries,
+including CRLF; Unicode separators inside strings do not create additional lines.
 
 ## Progress and termination
 

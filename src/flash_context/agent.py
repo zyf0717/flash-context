@@ -75,7 +75,8 @@ def search(
     repo_root = request.repo_root.resolve()
     validate_trajectory_dir(settings.traj_dir, repo_root)
     intent = QueryIntent.parse(request.query)
-    evidence = EvidenceState(symbol=intent.symbol)
+    resolver = CitationResolver(repo_root, settings, intent.symbol)
+    evidence = EvidenceState(symbol=intent.symbol, resolver=resolver)
     fast_result = _try_exact_fast_path(
         request,
         repo_root=repo_root,
@@ -94,9 +95,8 @@ def search(
             turns_used=0,
             truncated=fast_result.truncated,
             warnings=fast_result.warnings,
+            resolver=resolver,
         )
-    resolver = CitationResolver(repo_root, settings, intent.symbol)
-    evidence.resolver = resolver
     settings.require_endpoint()
     effective_max_turns = min(request.max_turns, settings.max_turns)
     recorder = TrajectoryRecorder(settings.traj_dir, request)
@@ -395,7 +395,9 @@ def _finalize_result(
         if request.query.strip("`\"' ") == (citations[0].path if citations else ""):
             kind = "preview"
         citations = [
-            replace(
+            c
+            if c.precision is not None
+            else replace(
                 c,
                 precision=CitationPrecision(c.end_line - c.start_line + 1, kind),
             )
@@ -514,6 +516,12 @@ def _try_exact_fast_path(
     evidence: EvidenceState,
     intent: QueryIntent,
 ) -> LocalEvidence | None:
+    if intent.symbol_anchor is not None:
+        assert evidence.resolver is not None
+        resolution = evidence.resolver.parse(intent.symbol_anchor)
+        if resolution.citations:
+            return LocalEvidence(resolution.citations, False, resolution.warnings)
+        return None
     bare_path = request.query.strip()
     if len(bare_path) >= 2 and bare_path[0] in "`'\"" and bare_path[-1] == bare_path[0]:
         bare_path = bare_path[1:-1]

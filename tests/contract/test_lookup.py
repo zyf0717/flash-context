@@ -7,9 +7,12 @@ from pathlib import Path
 import pytest
 
 from flash_context.agent import search
+from flash_context.citations import CitationResolver, Resolution
 from flash_context.config import Settings
 from flash_context.llm import ChatClient
+from flash_context.queries import QueryIntent
 from flash_context.types import (
+    Diagnostic,
     RawLocation,
     SearchError,
     SearchRequest,
@@ -220,3 +223,123 @@ def test_exact_documentation_path_stays_endpoint_free(tmp_path: Path) -> None:
     assert result.turns_used == 0
     assert result.answer == "guide.md:1"
     assert not result.warnings
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "httpx/_client.py#BaseClient._redirect_method",
+        "`httpx/_client.py#_redirect_method`",
+        "'httpx/_client.py#BaseClient._redirect_method'",
+        '"httpx/_client.py#_redirect_method"',
+    ],
+)
+def test_symbol_anchor_resolves_httpx_without_endpoint(query: str) -> None:
+    root = Path("tests/fixtures/httpx_0_28_1").resolve()
+    result = search(SearchRequest(query, root), Settings())
+    assert result.turns_used == 0
+    assert result.answer == "httpx/_client.py:494-515"
+    precision = result.citations[0].precision
+    assert precision is not None
+    assert precision.boundary_kind == "definition"
+    assert precision.symbol == "BaseClient._redirect_method"
+    assert result.raw_locations[0].text == "".join(
+        (root / "httpx/_client.py").read_text().splitlines(keepends=True)[493:515]
+    )
+    assert not result.truncated and not result.warnings
+
+
+@pytest.mark.parametrize(
+    "filename,source",
+    [
+        ("a.py", "def calculate():\n    return 42\n"),
+        ("a.js", "export function calculate() { return 42; }\n"),
+    ],
+)
+def test_root_symbol_anchor_uses_snapshot_and_snippet_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, filename: str, source: str
+) -> None:
+    path = tmp_path / filename
+    path.write_text(source)
+    parse = CitationResolver.parse
+
+    def changed_after_parse(self: CitationResolver, content: str) -> Resolution:
+        result = parse(self, content)
+        path.write_text("changed = True\n")
+        return result
+
+    monkeypatch.setattr(CitationResolver, "parse", changed_after_parse)
+    result = search(
+        SearchRequest(f"{filename}#calculate", tmp_path), Settings(max_read_bytes=8)
+    )
+    assert result.turns_used == 0
+    assert result.raw_locations[0].text == source[:8]
+    assert result.truncated and Diagnostic.RAW_TRUNCATED in result.warnings
+    assert path.read_text() == "changed = True\n"
+
+
+@pytest.mark.parametrize(
+    "filename,source,settings",
+    [
+        ("a.py", "def other(): pass\n", Settings()),
+        (
+            "a.py",
+            "class A:\n    def f(self): pass\nclass B:\n    def f(self): pass\n",
+            Settings(),
+        ),
+        ("a.txt", "def f(): pass\n", Settings()),
+        ("a.py", "def f():\n    pass\n", Settings(max_citation_lines=1)),
+        ("a.py", "def f(): pass\n", Settings(ignore=["a.py"])),
+    ],
+)
+def test_unresolved_symbol_anchor_retains_model_routing(
+    tmp_path: Path, filename: str, source: str, settings: Settings
+) -> None:
+    (tmp_path / filename).write_text(source)
+    with pytest.raises(SearchError, match="CONFIG_MISSING_ENDPOINT"):
+        search(SearchRequest(f"{filename}#f", tmp_path), settings)
+
+
+@pytest.mark.parametrize("query", [".env#f", "../outside.py#f", "alias.py#f"])
+def test_symbol_anchor_safety_does_not_leak_source(tmp_path: Path, query: str) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    private = "def f(): return 'PRIVATE_SOURCE'\n"
+    (repo / ".env").write_text(private)
+    (tmp_path / "outside.py").write_text(private)
+    (repo / "alias.py").symlink_to(tmp_path / "outside.py")
+    payloads: list[dict[str, object]] = []
+    settings = Settings(base_url="http://test/v1", model="mock")
+    client = ChatClient(
+        settings,
+        transport=_mock_transport(
+            iter([_message_response("NO_CITATIONS_FOUND")]), payloads
+        ),
+    )
+    try:
+        result = search(SearchRequest(query, repo), settings, client=client)
+    finally:
+        client.close()
+    assert result.turns_used == 1 and not result.citations
+    assert "PRIVATE_SOURCE" not in json.dumps(payloads)
+    assert "PRIVATE_SOURCE" not in json.dumps(result.to_dict())
+
+
+def test_symbol_anchor_parser_limit_survives_model_fallback(tmp_path: Path) -> None:
+    (tmp_path / "a.py").write_text("def f():\n    pass\n")
+    settings = Settings(base_url="http://test/v1", model="mock", max_parse_bytes=4)
+    client = ChatClient(
+        settings,
+        transport=_mock_transport(iter([_message_response("NO_CITATIONS_FOUND")])),
+    )
+    try:
+        result = search(SearchRequest("a.py#f", tmp_path), settings, client=client)
+    finally:
+        client.close()
+    assert result.turns_used == 1 and not result.citations
+    assert result.truncated and Diagnostic.PARSER_INPUT_LIMIT in result.warnings
+
+
+def test_anchor_fast_path_only_accepts_one_complete_query() -> None:
+    for query in ("Explain a.py#f", "a.py#f a.py#g", "a.py#f trailing"):
+        assert QueryIntent.parse(query).symbol_anchor is None

@@ -55,6 +55,10 @@ For example, `--query 'httpx/_client.py'` returns a bounded file preview, while
 `--query 'BaseTransport'` returns its definition if unique within a complete
 Python source/stub scan. Local successes report `turns_used: 0` in JSON.
 
+Use `--query 'httpx/_client.py#BaseClient._redirect_method'` to resolve a parsed
+definition locally. A leaf name such as `httpx/_client.py#_redirect_method` works
+when unique in that file. Unresolved anchors fall back to model-guided search.
+
 Warnings go to stderr in both output formats. An empty result after scan-budget
 exhaustion exits **6** while preserving stdout; a complete empty search exits
 **0**. For large repositories, see [scan-budget tuning](docs/configuration.md#large-repositories).
