@@ -4,7 +4,7 @@ import fnmatch
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from repo_context.types import ExplorerError
+from flash_context.types import ExplorerError
 
 DEFAULT_DENY_PATTERNS = (
     ".git/**",

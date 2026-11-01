@@ -2,8 +2,13 @@
 
 ## Command
 
+Install with `uv tool install flash-context` (Python 3.13+).
+Published installations load defaults, process environment variables, and CLI
+overrides. Only source checkouts discover project-root `config.yaml` and `.env`,
+as specified in [spec 006](../../006-project-root-yaml-dotenv-config/spec.md).
+
 ```bash
-repo-context explore [OPTIONS]
+flash-context explore [OPTIONS]
 ```
 
 ## Required Options
@@ -89,5 +94,5 @@ secret values.
 Example:
 
 ```text
-CONFIG_MISSING_ENDPOINT: FASTCONTEXT_BASE_URL is required
+CONFIG_MISSING_ENDPOINT: FLASH_CONTEXT_BASE_URL is required
 ```

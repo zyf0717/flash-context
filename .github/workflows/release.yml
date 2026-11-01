@@ -1,0 +1,153 @@
+name: CI and release
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.11.21"
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked --extra mcp
+      - run: uv run --locked ruff check .
+      - run: uv run --locked mypy
+      - run: uv run --locked pytest -m "not e2e"
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.11.21"
+          python-version: "3.13"
+      - name: Check tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: test "$RELEASE_TAG" = "v$(uv version --short)"
+      - run: uv build
+      - run: uvx twine check --strict dist/*
+      - name: Check installed wheel and source distribution
+        run: |
+          version=$(uv version --short)
+          uv venv /tmp/wheel-check
+          uv pip install --python /tmp/wheel-check/bin/python dist/*.whl
+          PATH="/tmp/wheel-check/bin:$PATH" /tmp/wheel-check/bin/python scripts/smoke_test.py "$version"
+          uv venv /tmp/sdist-check
+          uv pip install --python /tmp/sdist-check/bin/python "dist/flash_context-$version.tar.gz[mcp]"
+          PATH="/tmp/sdist-check/bin:$PATH" /tmp/sdist-check/bin/python scripts/smoke_test.py "$version" --mcp
+      - uses: actions/upload-artifact@v7
+        with:
+          name: distributions
+          path: dist/*
+          if-no-files-found: error
+
+  testpypi:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/flash-context
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: distributions
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@v1.14.3
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  verify-testpypi:
+    needs: testpypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.11.21"
+          python-version: "3.13"
+      - name: Install exact version from TestPyPI and check it
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version=${RELEASE_TAG#v}
+          uv venv /tmp/index-check
+          for attempt in {1..6}; do
+            if uv pip install --python /tmp/index-check/bin/python --no-deps --index-url https://test.pypi.org/simple/ "flash-context==$version"; then
+              break
+            fi
+            if [ "$attempt" -eq 6 ]; then exit 1; fi
+            sleep 10
+          done
+          # Keep the installed package; resolve its dependencies from production PyPI.
+          uv pip install --python /tmp/index-check/bin/python "flash-context[mcp]==$version"
+          PATH="/tmp/index-check/bin:$PATH" /tmp/index-check/bin/python scripts/smoke_test.py "$version" --mcp
+
+  pypi:
+    needs: verify-testpypi
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/flash-context
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: distributions
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@v1.14.3
+
+  verify-pypi:
+    needs: pypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.11.21"
+          python-version: "3.13"
+      - name: Install exact version from PyPI and check it
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version=${RELEASE_TAG#v}
+          uv venv /tmp/index-check
+          for attempt in {1..6}; do
+            if uv pip install --python /tmp/index-check/bin/python "flash-context[mcp]==$version"; then
+              break
+            fi
+            if [ "$attempt" -eq 6 ]; then exit 1; fi
+            sleep 10
+          done
+          PATH="/tmp/index-check/bin:$PATH" /tmp/index-check/bin/python scripts/smoke_test.py "$version" --mcp

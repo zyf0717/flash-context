@@ -5,9 +5,9 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
-from repo_context.agent import explore
-from repo_context.config import Settings, SettingsOverrides, load_settings
-from repo_context.types import ExploreRequest, ExplorerError, ExploreResult
+from flash_context.agent import explore
+from flash_context.config import Settings, SettingsOverrides, load_settings
+from flash_context.types import ExploreRequest, ExplorerError, ExploreResult
 
 CoreFn = Callable[[ExploreRequest, Settings], ExploreResult]
 
@@ -62,10 +62,10 @@ def create_server() -> Any:
     except ImportError as exc:
         raise ExplorerError(
             "CONFIG_INVALID",
-            "MCP SDK is not installed; install repo-context[mcp]",
+            "MCP SDK is not installed; install flash-context[mcp]",
         ) from exc
     fast_mcp = fastmcp_module.FastMCP
-    server = fast_mcp("repo-context")
+    server = fast_mcp("flash-context")
 
     @server.tool()  # type: ignore[untyped-decorator]
     def explore_repository(

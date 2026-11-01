@@ -8,13 +8,13 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from repo_context import config as config_module
-from repo_context import mcp_server
-from repo_context.agent import explore
-from repo_context.config import Settings
-from repo_context.llm import ChatClient
-from repo_context.mcp_server import explore_repository_handler
-from repo_context.types import Citation, ExploreRequest, ExploreResult, RawLocation
+from flash_context import config as config_module
+from flash_context import mcp_server
+from flash_context.agent import explore
+from flash_context.config import Settings
+from flash_context.llm import ChatClient
+from flash_context.mcp_server import explore_repository_handler
+from flash_context.types import Citation, ExploreRequest, ExploreResult, RawLocation
 
 
 def test_mcp_handler_delegates_to_core(tmp_path: Path) -> None:
@@ -84,7 +84,7 @@ def test_mcp_handler_uses_project_root_config_and_dotenv(
 ) -> None:
     captured: dict[str, object] = {}
     for key in list(os.environ):
-        if key.startswith("FASTCONTEXT_"):
+        if key.startswith("FLASH_CONTEXT_"):
             monkeypatch.delenv(key, raising=False)
     monkeypatch.setattr(config_module, "_project_root", lambda: tmp_path)
     (tmp_path / "config.yaml").write_text(
@@ -96,7 +96,7 @@ model:
         encoding="utf-8",
     )
     (tmp_path / ".env").write_text(
-        "FASTCONTEXT_BASE_URL=http://dotenv/v1\n",
+        "FLASH_CONTEXT_BASE_URL=http://dotenv/v1\n",
         encoding="utf-8",
     )
 
@@ -206,7 +206,7 @@ def test_mcp_server_registers_explore_repository(
 
     server = mcp_server.create_server()
 
-    assert server.name == "repo-context"
+    assert server.name == "flash-context"
     assert "explore_repository" in server.tools
 
 

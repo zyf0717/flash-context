@@ -7,12 +7,12 @@ explorer:
     - "node_modules"
     - "dist"
     - "build"
-  # Relative paths resolve from the repo-context project root.
-  traj_dir: ".fastcontext"
+  # Relative paths resolve from the flash-context project root.
+  traj_dir: ".flash-context"
 
 model:
-  base_url: "http://localhost:8000/v1"
-  model: "your-model-name"
+  base_url: "http://100.105.153.85:1234/v1"
+  model: "Qwen/Qwen3.5-4B"
   api_key: ""
   timeout_seconds: 120
   max_completion_tokens: 512

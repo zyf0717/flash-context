@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from repo_context.tools.safety import PathSafety
-from repo_context.types import ExplorerError, ToolObservation
+from flash_context.tools.safety import PathSafety
+from flash_context.types import ExplorerError, ToolObservation
 
 
 def read_file(

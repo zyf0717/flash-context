@@ -5,10 +5,19 @@ safety, endpoint handling, or result normalization.
 
 ## Server Command
 
+Published-package command (Python 3.13+):
+
+```bash
+uvx --from 'flash-context[mcp]' flash-context mcp --transport stdio
+```
+
+Published installations use process environment variables for configuration;
+source checkouts also load project-root `config.yaml` and `.env`.
+
 Expected development command:
 
 ```bash
-uv run repo-context mcp --transport stdio
+uv run flash-context mcp --transport stdio
 ```
 
 Options:

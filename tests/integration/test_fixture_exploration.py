@@ -6,10 +6,10 @@ from pathlib import Path
 
 import httpx
 
-from repo_context.agent import explore
-from repo_context.config import Settings
-from repo_context.llm import ChatClient
-from repo_context.types import ExploreRequest
+from flash_context.agent import explore
+from flash_context.config import Settings
+from flash_context.llm import ChatClient
+from flash_context.types import ExploreRequest
 
 
 def test_fixture_repository_returns_validation_citation() -> None:

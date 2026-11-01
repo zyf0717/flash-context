@@ -1,8 +1,8 @@
-# Implementation Plan: Repo Context Explorer
+# Implementation Plan: Flash Context Explorer
 
-Branch: `001-repo-context-explorer` | Date: 2026-06-18 | Spec: [spec.md](spec.md)
+Branch: `001-flash-context-explorer` | Date: 2026-06-18 | Spec: [spec.md](spec.md)
 
-Input: Feature specification from `/specs/001-repo-context-explorer/spec.md`
+Input: Feature specification from `/specs/001-flash-context-explorer/spec.md`
 
 ## Summary
 
@@ -18,8 +18,8 @@ Language/Version: Python 3.13+
 Primary Dependencies: `httpx`, `pydantic`, `pydantic-settings`, `typer` or
 `argparse`, official MCP Python SDK for the adapter
 
-Storage: Local files only; optional trajectory logs under `.fastcontext/` or
-`FASTCONTEXT_TRAJ_DIR`
+Storage: Local files only; optional trajectory logs under `.flash-context/` or
+`FLASH_CONTEXT_TRAJ_DIR`
 
 Testing: `pytest`, mocked HTTP transport, fixture repositories
 
@@ -52,7 +52,7 @@ AGENTS.md:
 ### Documentation
 
 ```text
-specs/001-repo-context-explorer/
+specs/001-flash-context-explorer/
 |-- spec.md
 |-- plan.md
 |-- research.md
@@ -69,7 +69,7 @@ specs/001-repo-context-explorer/
 
 ```text
 pyproject.toml
-src/repo_context/
+src/flash_context/
 |-- __init__.py
 |-- cli.py
 |-- config.py
@@ -99,7 +99,7 @@ entrypoints import the same config, safety, tools, and agent modules.
 ### Phase 1: Package and contracts
 
 - Create `pyproject.toml` with `requires-python = ">=3.13"`.
-- Add console script `repo-context`.
+- Add console script `flash-context`.
 - Add source and test directories.
 - Encode CLI, MCP, and local tool contracts in tests before behavior.
 
@@ -118,7 +118,7 @@ entrypoints import the same config, safety, tools, and agent modules.
 
 ### Phase 4: CLI
 
-- Implement `repo-context explore`.
+- Implement `flash-context explore`.
 - Load config from project-root `config.yaml`, project-root `.env`, process
   environment, and CLI overrides.
 - Return explicit exit codes for config, repository, endpoint, and safety errors.

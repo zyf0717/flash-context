@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from repo_context.types import ExplorerError
+from flash_context.types import ExplorerError
 
 PROJECT_CONFIG_NAME = "config.yaml"
 PROJECT_ENV_NAME = ".env"
@@ -35,12 +35,12 @@ class Settings:
         if not self.base_url:
             raise ExplorerError(
                 "CONFIG_MISSING_ENDPOINT",
-                "FASTCONTEXT_BASE_URL is required",
+                "FLASH_CONTEXT_BASE_URL is required",
             )
         if not self.model:
             raise ExplorerError(
                 "CONFIG_INVALID",
-                "FASTCONTEXT_MODEL is required",
+                "FLASH_CONTEXT_MODEL is required",
             )
 
 
@@ -70,10 +70,11 @@ def load_settings(
     _ = repo_root
     settings = Settings()
     project_root = _project_root()
-    yaml_path = _default_config_path(project_root)
-    if yaml_path is not None:
-        settings = _apply_yaml(settings, yaml_path, project_root=project_root)
-    settings = _apply_env(settings, _load_dotenv(project_root / PROJECT_ENV_NAME))
+    if project_root is not None:
+        yaml_path = project_root / PROJECT_CONFIG_NAME
+        if yaml_path.exists():
+            settings = _apply_yaml(settings, yaml_path, project_root=project_root)
+        settings = _apply_env(settings, _load_dotenv(project_root / PROJECT_ENV_NAME))
     settings = _apply_env(settings, os.environ)
     if overrides is not None:
         settings = _apply_overrides(settings, overrides)
@@ -81,13 +82,11 @@ def load_settings(
     return settings
 
 
-def _default_config_path(project_root: Path) -> Path | None:
-    path = project_root / PROJECT_CONFIG_NAME
-    return path if path.exists() else None
-
-
-def _project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+def _project_root() -> Path | None:
+    source_dir = Path(__file__).resolve().parent.parent
+    if source_dir.name == "src" and (source_dir.parent / "pyproject.toml").is_file():
+        return source_dir.parent
+    return None
 
 
 def _load_dotenv(path: Path) -> dict[str, str]:
@@ -199,45 +198,45 @@ def _apply_yaml(settings: Settings, path: Path, *, project_root: Path) -> Settin
 def _apply_env(settings: Settings, env: Mapping[str, str | None]) -> Settings:
     return replace(
         settings,
-        base_url=env.get("FASTCONTEXT_BASE_URL") or settings.base_url,
-        model=env.get("FASTCONTEXT_MODEL") or settings.model,
-        api_key=env.get("FASTCONTEXT_API_KEY", settings.api_key),
-        max_turns=_env_int(env, "FASTCONTEXT_MAX_TURNS", settings.max_turns),
+        base_url=env.get("FLASH_CONTEXT_BASE_URL") or settings.base_url,
+        model=env.get("FLASH_CONTEXT_MODEL") or settings.model,
+        api_key=env.get("FLASH_CONTEXT_API_KEY", settings.api_key),
+        max_turns=_env_int(env, "FLASH_CONTEXT_MAX_TURNS", settings.max_turns),
         max_read_bytes=_env_int(
-            env, "FASTCONTEXT_MAX_READ_BYTES", settings.max_read_bytes
+            env, "FLASH_CONTEXT_MAX_READ_BYTES", settings.max_read_bytes
         ),
         max_grep_results=_env_int(
-            env, "FASTCONTEXT_MAX_GREP_RESULTS", settings.max_grep_results
+            env, "FLASH_CONTEXT_MAX_GREP_RESULTS", settings.max_grep_results
         ),
-        traj_dir=_optional_path(env.get("FASTCONTEXT_TRAJ_DIR")) or settings.traj_dir,
+        traj_dir=_optional_path(env.get("FLASH_CONTEXT_TRAJ_DIR")) or settings.traj_dir,
         timeout_seconds=_env_float(
             env,
-            "FASTCONTEXT_TIMEOUT_SECONDS",
+            "FLASH_CONTEXT_TIMEOUT_SECONDS",
             settings.timeout_seconds,
         ),
         max_observation_chars=_env_int(
             env,
-            "FASTCONTEXT_MAX_OBSERVATION_CHARS",
+            "FLASH_CONTEXT_MAX_OBSERVATION_CHARS",
             settings.max_observation_chars,
         ),
         max_read_lines=_env_int(
             env,
-            "FASTCONTEXT_MAX_READ_LINES",
+            "FLASH_CONTEXT_MAX_READ_LINES",
             settings.max_read_lines,
         ),
         max_completion_tokens=_env_int(
             env,
-            "FASTCONTEXT_MAX_COMPLETION_TOKENS",
+            "FLASH_CONTEXT_MAX_COMPLETION_TOKENS",
             settings.max_completion_tokens,
         ),
         max_parallel_tools=_env_int(
             env,
-            "FASTCONTEXT_MAX_PARALLEL_TOOLS",
+            "FLASH_CONTEXT_MAX_PARALLEL_TOOLS",
             settings.max_parallel_tools,
         ),
         temperature=_env_float(
             env,
-            "FASTCONTEXT_TEMPERATURE",
+            "FLASH_CONTEXT_TEMPERATURE",
             settings.temperature,
         ),
     )

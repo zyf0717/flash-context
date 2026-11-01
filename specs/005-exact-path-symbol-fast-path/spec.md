@@ -42,7 +42,7 @@ unclear confidence continues into the existing FastContext model loop unchanged.
 If the query contains a parseable repository-relative citation such as:
 
 ```text
-src/repo_context/agent.py:10-30
+src/flash_context/agent.py:10-30
 ```
 
 the controller should verify the path and line range with safe bounded
@@ -57,8 +57,8 @@ backticked, quoted, or token-like target, the controller may scan only that file
 Examples:
 
 ```text
-In src/repo_context/config.py, find `max_parallel_tools`.
-Find "def explore" in src/repo_context/agent.py.
+In src/flash_context/config.py, find `max_parallel_tools`.
+Find "def explore" in src/flash_context/agent.py.
 ```
 
 Allowed short-circuits in this case:

@@ -1,23 +1,34 @@
 [project]
-name = "repo-context"
+name = "flash-context"
 version = "0.1.0"
-description = "Read-only repository context explorer for coding agents."
+description = "Read-only context exploration and retrieval for AI agents, starting with codebases and repositories."
 readme = "README.md"
 requires-python = ">=3.13"
-license = { file = "LICENSE" }
-authors = [{ name = "repo-context maintainers" }]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "flash-context maintainers" }]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development",
+]
 dependencies = [
   "httpx>=0.28.0",
-  "pydantic>=2.10.0",
-  "pydantic-settings>=2.7.0",
   "PyYAML>=6.0.0",
 ]
 
+[project.urls]
+Repository = "https://github.com/zyf0717/flash-context"
+Issues = "https://github.com/zyf0717/flash-context/issues"
+
 [project.optional-dependencies]
-mcp = ["mcp>=1.13.0"]
+mcp = ["mcp>=1.13.0,<2"]
 
 [project.scripts]
-repo-context = "repo_context.cli:main"
+flash-context = "flash_context.cli:main"
 
 [dependency-groups]
 dev = [
@@ -28,8 +39,21 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flash_context"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src/flash_context",
+  "/pyproject.toml",
+  "/README.md",
+  "/LICENSE",
+  "/config.yaml.example",
+  "/.env.example",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -48,5 +72,5 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.13"
 strict = true
-files = ["src/repo_context", "tests/unit", "tests/contract"]
+files = ["src/flash_context", "tests/unit", "tests/contract"]
 exclude = ["tests/fixtures"]

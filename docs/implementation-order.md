@@ -12,15 +12,15 @@ Create the Python 3.13+ package baseline with `uv`, `pyproject.toml`, source
 layout, test layout, and documentation examples. Freeze the public contracts
 before writing the tool loop:
 
-- CLI command: `repo-context explore`.
+- CLI command: `flash-context explore`.
 - Config sources: project-root `config.yaml`, project-root `.env`, and process env.
 - Local read-only tool contract: `read_file`, `repo_glob`, `repo_grep`.
 - MCP adapter contract: `explore_repository`.
 
 Exit criteria:
 
-- `uv run repo-context --help` is expected to be possible once code exists.
-- Contracts in `specs/001-repo-context-explorer/contracts/` are stable enough
+- `uv run flash-context --help` is expected to be possible once code exists.
+- Contracts in `specs/001-flash-context-explorer/contracts/` are stable enough
   for tests to target.
 
 ## 2. Root-scoped read-only tools
@@ -58,7 +58,7 @@ snippets in JSON-compatible output.
 - Validate citation content before continuing with trailing tool calls.
 - Stop on valid controller-verified citations, repeated tool-call loops, final
   answer, or max turns.
-- Persist optional trajectory logs under `FASTCONTEXT_TRAJ_DIR`.
+- Persist optional trajectory logs under `FLASH_CONTEXT_TRAJ_DIR`.
 - Normalize citation-mode output to concise controller-rendered citations by
   default.
 - Bound prompt growth with observation caps, read-line caps, completion-token
@@ -84,7 +84,7 @@ Exit criteria:
 Expose the exploration core through:
 
 ```bash
-repo-context explore --query TEXT --repo PATH --max-turns 6 --citation
+flash-context explore --query TEXT --repo PATH --max-turns 6 --citation
 ```
 
 Required behavior:
@@ -125,7 +125,11 @@ Add operational guardrails after the core paths work:
 - Optional trajectory retention controls.
 - `ruff` and `pyright` or `mypy` checks for Python 3.13+.
 - README quickstart and examples for Codex, Copilot, and MCP clients.
-- Packaging path suitable for `uvx` once published.
+- PyPI metadata and explicit wheel/source distribution contents.
+- Clean installed-package checks for CLI exploration and the real MCP SDK.
+- Tag-driven tests, build, TestPyPI install verification, PyPI publication, and
+  PyPI install verification; see [Releasing](releasing.md) and
+  [spec 008](../specs/008-pypi-release/spec.md).
 
 Exit criteria:
 

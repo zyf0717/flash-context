@@ -2,7 +2,7 @@
 
 Status: implemented
 
-Extends: `001-repo-context-explorer`
+Extends: `001-flash-context-explorer`
 
 ## Summary
 
@@ -42,8 +42,8 @@ citation validation, loop termination, and citation-mode rendering.
 Citation mode is deterministic:
 
 ```text
-src/repo_context/agent.py:65-230
-src/repo_context/agent.py:317-397
+src/flash_context/agent.py:65-230
+src/flash_context/agent.py:317-397
 ```
 
 The prompt asks for a `<final_answer>` block, but that block is advisory model

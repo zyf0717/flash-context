@@ -6,10 +6,10 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from repo_context.agent import explore, format_text_result
-from repo_context.config import SettingsOverrides, load_settings
-from repo_context.mcp_server import run_mcp
-from repo_context.types import ExploreRequest, ExplorerError
+from flash_context.agent import explore, format_text_result
+from flash_context.config import SettingsOverrides, load_settings
+from flash_context.mcp_server import run_mcp
+from flash_context.types import ExploreRequest, ExplorerError
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -24,7 +24,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="repo-context")
+    parser = argparse.ArgumentParser(prog="flash-context")
     subparsers = parser.add_subparsers(dest="command")
 
     explore_parser = subparsers.add_parser("explore", help="explore a repository")

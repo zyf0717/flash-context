@@ -8,14 +8,14 @@ from typing import Literal
 
 import pytest
 
-from repo_context.agent import NO_CITATIONS_FOUND, explore, format_text_result
-from repo_context.config import SettingsOverrides, load_settings
-from repo_context.types import Citation, ExploreRequest, ExplorerError
+from flash_context.agent import NO_CITATIONS_FOUND, explore, format_text_result
+from flash_context.config import SettingsOverrides, load_settings
+from flash_context.types import Citation, ExploreRequest, ExplorerError
 
 pytestmark = pytest.mark.e2e
 
-RUN_E2E_ENV = "REPO_CONTEXT_RUN_E2E"
-E2E_IGNORE = [".fastcontext/**"]
+RUN_E2E_ENV = "FLASH_CONTEXT_RUN_E2E"
+E2E_IGNORE = [".flash-context/**"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,46 +40,46 @@ PROMPT_CASES = (
     PromptCase(
         name="config observation cap",
         query=(
-            "In src/repo_context/config.py, find where the Settings model defines "
+            "In src/flash_context/config.py, find where the Settings model defines "
             "`max_observation_chars`. Return citations only."
         ),
-        expected_path="src/repo_context/config.py",
+        expected_path="src/flash_context/config.py",
         expected_text="max_observation_chars",
     ),
     PromptCase(
         name="llm completion limits",
         query=(
-            "In src/repo_context/llm.py, find where chat completion payloads set "
+            "In src/flash_context/llm.py, find where chat completion payloads set "
             "`max_tokens`. Return citations only."
         ),
-        expected_path="src/repo_context/llm.py",
+        expected_path="src/flash_context/llm.py",
         expected_text="max_tokens",
     ),
     PromptCase(
         name="path safety class",
         query=(
-            "In src/repo_context/tools/safety.py, find the definition of "
+            "In src/flash_context/tools/safety.py, find the definition of "
             "`PathSafety`. Return citations only."
         ),
-        expected_path="src/repo_context/tools/safety.py",
+        expected_path="src/flash_context/tools/safety.py",
         expected_text="class PathSafety",
     ),
     PromptCase(
         name="read tool entrypoint",
         query=(
-            "In src/repo_context/tools/read.py, find the `read_file` function "
+            "In src/flash_context/tools/read.py, find the `read_file` function "
             "definition. Return citations only."
         ),
-        expected_path="src/repo_context/tools/read.py",
+        expected_path="src/flash_context/tools/read.py",
         expected_text="def read_file",
     ),
     PromptCase(
         name="mcp handler",
         query=(
-            "In src/repo_context/mcp_server.py, find the "
+            "In src/flash_context/mcp_server.py, find the "
             "`explore_repository_handler` function definition. Return citations only."
         ),
-        expected_path="src/repo_context/mcp_server.py",
+        expected_path="src/flash_context/mcp_server.py",
         expected_text="def explore_repository_handler",
     ),
 )
@@ -87,14 +87,14 @@ PROMPT_CASES = (
 FAST_PATH_CASES = (
     PromptCase(
         name="fast path explicit citation",
-        query="Return src/repo_context/agent.py:1175-1183 citations only.",
-        expected_path="src/repo_context/agent.py",
+        query="Return src/flash_context/agent.py:1175-1183 citations only.",
+        expected_path="src/flash_context/agent.py",
         expected_text="def _execute_tool_calls_parallel",
     ),
     PromptCase(
         name="fast path unique symbol",
         query="Find `_cap_text`.",
-        expected_path="src/repo_context/tools/grep.py",
+        expected_path="src/flash_context/tools/grep.py",
         expected_text="def _cap_text",
     ),
 )
@@ -102,40 +102,40 @@ FAST_PATH_CASES = (
 MIXED_EDGE_CASES = (
     MixedPromptCase(
         name="explicit citation fast path",
-        query="Return src/repo_context/types.py:46-64 citations only.",
+        query="Return src/flash_context/types.py:46-64 citations only.",
         expected_mode="fast",
-        expected_path="src/repo_context/types.py",
+        expected_path="src/flash_context/types.py",
         expected_text="class Citation",
     ),
     MixedPromptCase(
         name="explicit file quoted text fast path",
-        query='Find "tool_choice" in src/repo_context/llm.py. Return citations only.',
+        query='Find "tool_choice" in src/flash_context/llm.py. Return citations only.',
         expected_mode="fast",
-        expected_path="src/repo_context/llm.py",
+        expected_path="src/flash_context/llm.py",
         expected_text="tool_choice",
     ),
     MixedPromptCase(
         name="explicit file assignment fast path",
         query=(
-            "In src/repo_context/tools/grep.py, find `MAX_HIT_TEXT`. "
+            "In src/flash_context/tools/grep.py, find `MAX_HIT_TEXT`. "
             "Return citations only."
         ),
         expected_mode="fast",
-        expected_path="src/repo_context/tools/grep.py",
+        expected_path="src/flash_context/tools/grep.py",
         expected_text="MAX_HIT_TEXT = 240",
     ),
     MixedPromptCase(
         name="pathless unique function fast path",
         query="Find `_chat_completions_url`. Return citations only.",
         expected_mode="fast",
-        expected_path="src/repo_context/llm.py",
+        expected_path="src/flash_context/llm.py",
         expected_text="def _chat_completions_url",
     ),
     MixedPromptCase(
         name="pathless unique class fast path",
         query="Find `TrajectoryRecorder`. Return citations only.",
         expected_mode="fast",
-        expected_path="src/repo_context/logging.py",
+        expected_path="src/flash_context/logging.py",
         expected_text="class TrajectoryRecorder",
     ),
     MixedPromptCase(
@@ -145,13 +145,13 @@ MIXED_EDGE_CASES = (
             "Return citations only."
         ),
         expected_mode="model_loop",
-        expected_path="src/repo_context/agent.py",
+        expected_path="src/flash_context/agent.py",
         expected_text="def _execute_tool_calls_parallel",
         allow_no_citations=True,
     ),
     MixedPromptCase(
         name="pathless assignment model loop",
-        query="Find `FASTCONTEXT_MAX_PARALLEL_TOOLS`. Return citations only.",
+        query="Find `FLASH_CONTEXT_MAX_PARALLEL_TOOLS`. Return citations only.",
         expected_mode="model_loop",
     ),
     MixedPromptCase(
@@ -162,7 +162,7 @@ MIXED_EDGE_CASES = (
     MixedPromptCase(
         name="missing explicit file target model loop",
         query=(
-            "In src/repo_context/agent.py, find `definitely_missing_symbol`. "
+            "In src/flash_context/agent.py, find `definitely_missing_symbol`. "
             "Return citations only."
         ),
         expected_mode="model_loop",
@@ -170,7 +170,7 @@ MIXED_EDGE_CASES = (
     ),
     MixedPromptCase(
         name="invalid explicit citation model loop",
-        query="Return src/repo_context/agent.py:999999-1000000 citations only.",
+        query="Return src/flash_context/agent.py:999999-1000000 citations only.",
         expected_mode="model_loop",
         allow_no_citations=True,
     ),

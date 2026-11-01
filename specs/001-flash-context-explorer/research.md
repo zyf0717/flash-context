@@ -1,4 +1,4 @@
-# Research: Repo Context Explorer
+# Research: Flash Context Explorer
 
 ## Decision
 

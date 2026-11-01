@@ -16,19 +16,19 @@ intent and is prompted toward compact `<final_answer>` output.
 ## Requirements
 
 - Endpoint requests include deterministic generation controls:
-  - `max_tokens` from `FASTCONTEXT_MAX_COMPLETION_TOKENS`, default `512`;
-  - `temperature` from `FASTCONTEXT_TEMPERATURE`, default `0`.
+  - `max_tokens` from `FLASH_CONTEXT_MAX_COMPLETION_TOKENS`, default `512`;
+  - `temperature` from `FLASH_CONTEXT_TEMPERATURE`, default `0`.
 - Endpoint request timeout defaults to `120` seconds and is configurable with
-  `FASTCONTEXT_TIMEOUT_SECONDS`.
+  `FLASH_CONTEXT_TIMEOUT_SECONDS`.
 - Model observations sent back to the endpoint are capped by
-  `FASTCONTEXT_MAX_OBSERVATION_CHARS`, default `6000`.
-- Model-requested `read_file` calls are bounded by `FASTCONTEXT_MAX_READ_LINES`,
+  `FLASH_CONTEXT_MAX_OBSERVATION_CHARS`, default `6000`.
+- Model-requested `read_file` calls are bounded by `FLASH_CONTEXT_MAX_READ_LINES`,
   default `120`:
   - omitted line bounds read a bounded preview;
   - overly broad line ranges are clamped;
   - clamped observations preserve truncation metadata.
 - Controller verification reads for model citations are not clamped by
-  `FASTCONTEXT_MAX_READ_LINES`; they still obey repository safety and byte caps.
+  `FLASH_CONTEXT_MAX_READ_LINES`; they still obey repository safety and byte caps.
 - In citation mode, once non-truncated narrow read evidence exists, the
   controller may stop before executing another broad `read_file` request for an
   already-read path and return the best validated read evidence.

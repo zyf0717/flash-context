@@ -1,219 +1,59 @@
-# repo-context
+# flash-context
 
-Read-only repository context explorer for coding agents.
+Read-only context exploration and retrieval for AI agents,
+available as a Python CLI and Model Context Protocol (MCP) server.
 
-The canonical architecture is a local CLI-first exploration core that talks to an
-OpenAI-compatible FastContext-style model endpoint. MCP is an adapter around the
-same core, not the primary abstraction.
+Ask natural-language questions across source code, documentation, configuration,
+and other local text files, and get validated file-line citations and snippets.
+The current focus is codebases and repositories. Both interfaces share one
+exploration core, backed by an OpenAI-compatible FastContext-style endpoint.
+Local tools enforce read-only access, path safety, and resource limits.
 
-## Current Status
+## Quickstart
 
-This repository has the initial Python 3.13+ implementation for spec `001`:
-CLI, shared exploration core, read-only repository tools, OpenAI-compatible
-chat-completions client, optional trajectory logging, and a thin MCP adapter.
-It also includes spec `002` hardening for deterministic controller-owned
-finalization and citation-mode rendering, plus spec `003` latency controls for
-bounded endpoint prompt growth, and spec `004` same-turn parallel local tool
-execution. Spec `005` adds a deterministic exact path/symbol fast path for
-trivial evidence lookups. Spec `006` fixes configuration ownership to
-project-root `config.yaml` plus `.env`/environment overrides. Spec `007` adds
-raw source snippets for validated, merged citation ranges.
-
-Primary planning artifacts:
-
-- [Spec Kit feature spec](specs/001-repo-context-explorer/spec.md)
-- [Implementation plan](specs/001-repo-context-explorer/plan.md)
-- [Task breakdown](specs/001-repo-context-explorer/tasks.md)
-- [Deterministic explorer harness](specs/002-deterministic-explorer-harness/spec.md)
-- [Latency-bounded explorer harness](specs/003-latency-bounded-explorer-harness/spec.md)
-- [FastContext-compatible parallel tool executor](specs/004-fastcontext-parallel-tool-executor/spec.md)
-- [Exact path/symbol fast path](specs/005-exact-path-symbol-fast-path/spec.md)
-- [Project-root YAML and env configuration](specs/006-project-root-yaml-dotenv-config/spec.md)
-- [Raw location evidence with merged ranges](specs/007-raw-location-payload/spec.md)
-- [Implementation order](docs/implementation-order.md)
-
-## FastContext Alignment
-
-This project intentionally follows Microsoft FastContext's explorer shape:
-
-- Delegated repository exploration: CLI/MCP call a focused explorer core that
-  returns evidence for a downstream coding agent.
-- Read-only tools: the only model-callable repository tools are
-  `read_file`, `repo_glob`, and `repo_grep`, corresponding to FastContext's
-  `Read`, `Glob`, and `Grep`.
-- Same-turn parallel tool calling: independent local tool calls from one model
-  message execute concurrently, while model endpoint requests remain serial.
-- Compact evidence: citation mode renders controller-validated `path:start-end`
-  lines, with the model prompted toward a `<final_answer>` block.
-
-Primary references: [Microsoft FastContext README](https://github.com/microsoft/fastcontext),
-[FastContext model card](https://huggingface.co/microsoft/FastContext-1.0-4B-SFT),
-and [FastContext paper](https://arxiv.org/html/2606.14066v1).
-
-## Usage
-
-Use the CLI first for local debugging, scripts, CI checks, and one-off
-questions. It has the smallest moving parts and exposes the exact core result.
-
-Use MCP when an MCP-capable editor or agent should call repository exploration
-as a tool during its workflow. MCP delegates to the same core as the CLI.
-
-### Configure
-
-The default config lives in the `repo-context` project root:
+Requires Python 3.13+, `uv`, and an OpenAI-compatible model endpoint with tool
+calling support.
 
 ```bash
-cp config.yaml.example config.yaml
+uv tool install flash-context
+export FLASH_CONTEXT_BASE_URL=http://localhost:1234/v1
+export FLASH_CONTEXT_MODEL=your-model
+
+flash-context explore --repo . --query "Find the request validation logic"
 ```
 
-The inspected repository's config files are not loaded implicitly. This keeps
-the explorer's operator config independent of whatever target folder is being
-read.
+Replace the endpoint and model with your settings. Set `FLASH_CONTEXT_API_KEY`
+if authentication is required. Installed commands use environment variables;
+source checkouts also support project-root `config.yaml` and `.env`.
 
-Relative paths in `config.yaml`, including `explorer.traj_dir`, resolve from
-the `repo-context` project root. Environment path overrides are used as
-provided.
-
-Use project-root `.env` or process environment variables for local overrides,
-CI, or secrets:
-
-```bash
-cp .env.example .env
-```
-
-Configure at least:
+Default output is repository-relative citations:
 
 ```text
-FASTCONTEXT_BASE_URL=http://localhost:8000/v1
-FASTCONTEXT_MODEL=your-model-name
+src/api/validation.py:42-88
 ```
 
-Endpoint requests use a 120 second default timeout. The harness also caps
-model-observation payloads, model-requested read spans, completion tokens, and
-temperature to reduce latency variance. Independent same-turn local tool calls
-execute concurrently with a default worker cap of `4`; model endpoint requests
-remain serial.
+Use `--format json` for structured results with source snippets, or
+`--max-turns 6` to set the exploration limit. Exact path and unique symbol
+lookups can resolve locally without an endpoint. See the
+[CLI contract](specs/001-flash-context-explorer/contracts/cli.md) for options,
+output schemas, and exit codes.
 
-Exact path or uniquely defined symbol queries can complete locally without an
-endpoint when the controller can validate the citation deterministically.
-
-Configuration precedence:
-
-```text
-defaults < project-root config.yaml < project-root .env < process environment < CLI overrides
-```
-
-### CLI
-
-Text output:
+## MCP
 
 ```bash
-uv run repo-context explore \
-  --query "Find the request validation logic" \
-  --repo . \
-  --max-turns 6 \
-  --citation
+uvx --from 'flash-context[mcp]' flash-context mcp --transport stdio
 ```
 
-In citation mode, `repo-context` validates and normalizes citations in the
-controller. Text output is only repository-relative `path:start-end` labels, or
-`NO_CITATIONS_FOUND`; model prose is not emitted. The model is prompted to use a
-FastContext-style `<final_answer>` block, but the public text output is rendered
-from controller-validated citations.
+Exposes `explore_repository(query, repo_root?, max_turns?, citation?)`.
+See [MCP integration](docs/mcp.md) for editor configuration and source launches.
 
-JSON output:
+## Documentation
 
-```bash
-uv run repo-context explore \
-  --query "Find the request validation logic" \
-  --repo . \
-  --format json
-```
+- [Configuration](docs/configuration.md): endpoint settings, precedence, and limits.
+- [Architecture and scope](docs/architecture.md): design, status, specs, and references.
+- [Contributing](CONTRIBUTING.md): development setup, tests, and pull requests.
+- [Releasing](docs/releasing.md): package checks and tag-driven TestPyPI/PyPI publishing.
 
-### MCP
+## License
 
-Install optional MCP dependencies:
-
-```bash
-uv sync --extra mcp
-```
-
-Development server command:
-
-```bash
-uv run repo-context mcp \
-  --transport stdio
-```
-
-Tool: `explore_repository(query, repo_root?, max_turns?, citation?)`
-
-Generic MCP client config shape:
-
-```json
-{
-  "mcpServers": {
-    "repo-context": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--project",
-        "/path/to/repo-context",
-        "--extra",
-        "mcp",
-        "repo-context",
-        "mcp",
-        "--transport",
-        "stdio"
-      ],
-      "env": {
-        "FASTCONTEXT_BASE_URL": "http://localhost:8000/v1",
-        "FASTCONTEXT_MODEL": "your-model-name"
-      }
-    }
-  }
-}
-```
-
-## Validate
-
-```bash
-uv run pytest
-uv run ruff check .
-uv run mypy
-```
-
-Endpoint-backed e2e tests are opt-in and use this repository as the target repo:
-
-```bash
-REPO_CONTEXT_RUN_E2E=1 \
-FASTCONTEXT_BASE_URL=http://localhost:8000/v1 \
-FASTCONTEXT_MODEL=your-model-name \
-uv run pytest tests/e2e
-```
-
-To print per-prompt timing for the current-repo multi-prompt e2e:
-
-```bash
-REPO_CONTEXT_RUN_E2E=1 \
-FASTCONTEXT_BASE_URL=http://localhost:8000/v1 \
-FASTCONTEXT_MODEL=your-model-name \
-uv run pytest tests/e2e/test_current_repo_multi_prompt_timing.py -s
-```
-
-## Scope
-
-In scope:
-
-- Local, read-only repository exploration.
-- Root-scoped `read_file`, `repo_glob`, and `repo_grep` tools.
-- OpenAI-compatible chat completion loop with bounded tool observations.
-- Same-turn concurrent execution for independent local tool calls.
-- CLI output with file paths and line-range citations.
-- MCP adapter that delegates to the CLI/core implementation.
-
-Out of scope for the MVP:
-
-- Repository mutation.
-- Vector database ownership or embedding/model serving.
-- MCP-first `context_search`, `context_pack`, and `context_get` tools.
-- OKF bundle output.
+[Apache License 2.0](LICENSE).

@@ -1,4 +1,4 @@
-# Data Model: Repo Context Explorer
+# Data Model: Flash Context Explorer
 
 This document defines implementation-level data shapes. Names are descriptive;
 the implementing agent may adjust exact class names while preserving fields and
@@ -18,7 +18,7 @@ Fields:
 - `max_read_bytes: int`: Per-read content cap; default `12000`.
 - `max_grep_results: int`: Grep hit cap; default `50`.
 - `traj_dir: Path | None`: Optional run log directory. Relative paths from
-  `config.yaml` resolve from the `repo-context` project root; env overrides are
+  `config.yaml` resolve from the `flash-context` project root; env overrides are
   used as supplied.
 - `ignore: list[str]`: Directory/file patterns to exclude.
 - `timeout_seconds: float`: Endpoint request timeout; default `120`.
@@ -33,19 +33,19 @@ Fields:
 
 Primary env vars:
 
-- `FASTCONTEXT_BASE_URL`
-- `FASTCONTEXT_MODEL`
-- `FASTCONTEXT_API_KEY`
-- `FASTCONTEXT_MAX_TURNS`
-- `FASTCONTEXT_MAX_READ_BYTES`
-- `FASTCONTEXT_MAX_GREP_RESULTS`
-- `FASTCONTEXT_TRAJ_DIR`
-- `FASTCONTEXT_TIMEOUT_SECONDS`
-- `FASTCONTEXT_MAX_OBSERVATION_CHARS`
-- `FASTCONTEXT_MAX_READ_LINES`
-- `FASTCONTEXT_MAX_COMPLETION_TOKENS`
-- `FASTCONTEXT_TEMPERATURE`
-- `FASTCONTEXT_MAX_PARALLEL_TOOLS`
+- `FLASH_CONTEXT_BASE_URL`
+- `FLASH_CONTEXT_MODEL`
+- `FLASH_CONTEXT_API_KEY`
+- `FLASH_CONTEXT_MAX_TURNS`
+- `FLASH_CONTEXT_MAX_READ_BYTES`
+- `FLASH_CONTEXT_MAX_GREP_RESULTS`
+- `FLASH_CONTEXT_TRAJ_DIR`
+- `FLASH_CONTEXT_TIMEOUT_SECONDS`
+- `FLASH_CONTEXT_MAX_OBSERVATION_CHARS`
+- `FLASH_CONTEXT_MAX_READ_LINES`
+- `FLASH_CONTEXT_MAX_COMPLETION_TOKENS`
+- `FLASH_CONTEXT_TEMPERATURE`
+- `FLASH_CONTEXT_MAX_PARALLEL_TOOLS`
 
 ## ExploreRequest
 

@@ -9,11 +9,11 @@ from typing import Any, cast
 import httpx
 import pytest
 
-import repo_context.agent as agent_module
-from repo_context.agent import _model_observation_payload, explore, format_text_result
-from repo_context.config import Settings
-from repo_context.llm import ChatClient
-from repo_context.types import (
+import flash_context.agent as agent_module
+from flash_context.agent import _model_observation_payload, explore, format_text_result
+from flash_context.config import Settings
+from flash_context.llm import ChatClient
+from flash_context.types import (
     Citation,
     ExploreRequest,
     ExplorerError,
@@ -714,8 +714,8 @@ def test_narrow_evidence_stops_before_another_broad_read(tmp_path: Path) -> None
 
 def test_final_prose_without_citations_uses_best_read_evidence(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
-    (repo / "src" / "repo_context").mkdir(parents=True)
-    (repo / "src" / "repo_context" / "agent.py").write_text(
+    (repo / "src" / "flash_context").mkdir(parents=True)
+    (repo / "src" / "flash_context" / "agent.py").write_text(
         "".join(f"line {line}\n" for line in range(1, 401)),
         encoding="utf-8",
     )
@@ -724,13 +724,13 @@ def test_final_prose_without_citations_uses_best_read_evidence(tmp_path: Path) -
             _tool_response(
                 "call_1",
                 "read_file",
-                {"path": "src/repo_context/agent.py"},
+                {"path": "src/flash_context/agent.py"},
             ),
             _tool_response(
                 "call_2",
                 "read_file",
                 {
-                    "path": "src/repo_context/agent.py",
+                    "path": "src/flash_context/agent.py",
                     "start_line": 352,
                     "end_line": 365,
                 },
@@ -748,8 +748,8 @@ def test_final_prose_without_citations_uses_best_read_evidence(tmp_path: Path) -
     )
 
     assert result.answer.splitlines() == [
-        "src/repo_context/agent.py:1-120",
-        "src/repo_context/agent.py:352-365",
+        "src/flash_context/agent.py:1-120",
+        "src/flash_context/agent.py:352-365",
     ]
     assert "final answer did not include valid citations" in result.warnings
 
@@ -1001,7 +1001,7 @@ def test_max_turns_returns_partial_answer_when_model_provided_content(
 def test_model_observation_payload_numbers_read_content() -> None:
     payload = _model_observation_payload(
         ToolObservation(
-            path="src/repo_context/types.py",
+            path="src/flash_context/types.py",
             line_range="135-136",
             content="def validate(self) -> None:\n    pass\n",
         )

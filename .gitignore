@@ -160,12 +160,12 @@ ENV/
 env.bak/
 venv.bak/
 
-# repo-context local runtime config/state
-.repo-context.toml
-.repo-context.yaml
-.repo-context.yml
+# flash-context local runtime config/state
+.flash-context.toml
+.flash-context.yaml
+.flash-context.yml
 config.yaml
-.fastcontext/
+.flash-context/
 
 # Spyder project settings
 .spyderproject

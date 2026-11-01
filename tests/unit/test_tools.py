@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from repo_context.tools import read_file, repo_glob, repo_grep
-from repo_context.types import ExplorerError
+from flash_context.tools import read_file, repo_glob, repo_grep
+from flash_context.types import ExplorerError
 
 
 def test_read_file_returns_relative_path_and_line_range(tmp_path: Path) -> None:

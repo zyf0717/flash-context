@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from repo_context.types import (
+from flash_context.types import (
     ExploreRequest,
     ExplorerError,
     ExploreResult,

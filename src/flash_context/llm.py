@@ -4,8 +4,8 @@ from typing import Any
 
 import httpx
 
-from repo_context.config import Settings
-from repo_context.types import ExplorerError, JsonObject
+from flash_context.config import Settings
+from flash_context.types import ExplorerError, JsonObject
 
 
 class ChatClient:

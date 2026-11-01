@@ -4,29 +4,29 @@ from pathlib import Path
 
 import pytest
 
-from repo_context import config as config_module
-from repo_context.config import SettingsOverrides, load_settings
-from repo_context.types import ExplorerError
+from flash_context import config as config_module
+from flash_context.config import SettingsOverrides, load_settings
+from flash_context.types import ExplorerError
 
-FASTCONTEXT_ENV_KEYS = (
-    "FASTCONTEXT_BASE_URL",
-    "FASTCONTEXT_MODEL",
-    "FASTCONTEXT_API_KEY",
-    "FASTCONTEXT_MAX_TURNS",
-    "FASTCONTEXT_MAX_READ_BYTES",
-    "FASTCONTEXT_MAX_GREP_RESULTS",
-    "FASTCONTEXT_TRAJ_DIR",
-    "FASTCONTEXT_TIMEOUT_SECONDS",
-    "FASTCONTEXT_MAX_OBSERVATION_CHARS",
-    "FASTCONTEXT_MAX_READ_LINES",
-    "FASTCONTEXT_MAX_COMPLETION_TOKENS",
-    "FASTCONTEXT_TEMPERATURE",
-    "FASTCONTEXT_MAX_PARALLEL_TOOLS",
+FLASH_CONTEXT_ENV_KEYS = (
+    "FLASH_CONTEXT_BASE_URL",
+    "FLASH_CONTEXT_MODEL",
+    "FLASH_CONTEXT_API_KEY",
+    "FLASH_CONTEXT_MAX_TURNS",
+    "FLASH_CONTEXT_MAX_READ_BYTES",
+    "FLASH_CONTEXT_MAX_GREP_RESULTS",
+    "FLASH_CONTEXT_TRAJ_DIR",
+    "FLASH_CONTEXT_TIMEOUT_SECONDS",
+    "FLASH_CONTEXT_MAX_OBSERVATION_CHARS",
+    "FLASH_CONTEXT_MAX_READ_LINES",
+    "FLASH_CONTEXT_MAX_COMPLETION_TOKENS",
+    "FLASH_CONTEXT_TEMPERATURE",
+    "FLASH_CONTEXT_MAX_PARALLEL_TOOLS",
 )
 
 
 def _clear_config_env(monkeypatch: pytest.MonkeyPatch, project_root: Path) -> None:
-    for key in FASTCONTEXT_ENV_KEYS:
+    for key in FLASH_CONTEXT_ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setattr(config_module, "_project_root", lambda: project_root)
     monkeypatch.chdir(project_root)
@@ -46,6 +46,33 @@ def test_config_defaults_include_latency_controls(
     assert settings.max_completion_tokens == 512
     assert settings.temperature == 0.0
     assert settings.max_parallel_tools == 4
+
+
+@pytest.mark.parametrize("source_checkout", [False, True])
+def test_config_discovery_requires_source_checkout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source_checkout: bool,
+) -> None:
+    for key in FLASH_CONTEXT_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+    package_dir = tmp_path / ("src" if source_checkout else "site-packages")
+    monkeypatch.setattr(
+        config_module, "__file__", str(package_dir / "flash_context" / "config.py")
+    )
+    (tmp_path / "pyproject.toml").touch()
+    (tmp_path / "config.yaml").write_text(
+        "model:\n  model: yaml-model\n", encoding="utf-8"
+    )
+    (tmp_path / ".env").write_text(
+        "FLASH_CONTEXT_BASE_URL=http://dotenv/v1\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    settings = load_settings(repo_root=tmp_path)
+
+    assert settings.model == ("yaml-model" if source_checkout else "")
+    assert settings.base_url == ("http://dotenv/v1" if source_checkout else "")
 
 
 def test_config_precedence_defaults_yaml_dotenv_env_overrides(
@@ -77,17 +104,17 @@ tools:
     )
     (tmp_path / ".env").write_text(
         """
-FASTCONTEXT_BASE_URL=http://dotenv/v1
-FASTCONTEXT_MODEL=dotenv-model
-FASTCONTEXT_MAX_TURNS=4
-FASTCONTEXT_MAX_READ_LINES=14
-FASTCONTEXT_TEMPERATURE=0.2
+FLASH_CONTEXT_BASE_URL=http://dotenv/v1
+FLASH_CONTEXT_MODEL=dotenv-model
+FLASH_CONTEXT_MAX_TURNS=4
+FLASH_CONTEXT_MAX_READ_LINES=14
+FLASH_CONTEXT_TEMPERATURE=0.2
 """,
         encoding="utf-8",
     )
-    monkeypatch.setenv("FASTCONTEXT_BASE_URL", "http://env/v1")
-    monkeypatch.setenv("FASTCONTEXT_MAX_PARALLEL_TOOLS", "16")
-    monkeypatch.setenv("FASTCONTEXT_TEMPERATURE", "0.1")
+    monkeypatch.setenv("FLASH_CONTEXT_BASE_URL", "http://env/v1")
+    monkeypatch.setenv("FLASH_CONTEXT_MAX_PARALLEL_TOOLS", "16")
+    monkeypatch.setenv("FLASH_CONTEXT_TEMPERATURE", "0.1")
 
     settings = load_settings(
         repo_root=tmp_path,
@@ -131,8 +158,8 @@ model:
         encoding="utf-8",
     )
     (repo / ".env").write_text(
-        "FASTCONTEXT_BASE_URL=http://target-env/v1\n"
-        "FASTCONTEXT_MODEL=target-env-model\n",
+        "FLASH_CONTEXT_BASE_URL=http://target-env/v1\n"
+        "FLASH_CONTEXT_MODEL=target-env-model\n",
         encoding="utf-8",
     )
     monkeypatch.chdir(repo)
@@ -163,8 +190,8 @@ model:
         encoding="utf-8",
     )
     (caller / ".env").write_text(
-        "FASTCONTEXT_BASE_URL=http://caller-env/v1\n"
-        "FASTCONTEXT_MODEL=caller-env-model\n",
+        "FLASH_CONTEXT_BASE_URL=http://caller-env/v1\n"
+        "FLASH_CONTEXT_MODEL=caller-env-model\n",
         encoding="utf-8",
     )
     monkeypatch.chdir(caller)
@@ -189,7 +216,7 @@ def test_yaml_traj_dir_is_project_root_relative_from_external_cwd(
     (project_root / "config.yaml").write_text(
         """
 explorer:
-  traj_dir: ".fastcontext"
+  traj_dir: ".flash-context"
 """,
         encoding="utf-8",
     )
@@ -197,7 +224,7 @@ explorer:
 
     settings = load_settings(repo_root=repo)
 
-    assert settings.traj_dir == project_root / ".fastcontext"
+    assert settings.traj_dir == project_root / ".flash-context"
 
 
 def test_env_traj_dir_override_is_used_as_supplied(
@@ -210,11 +237,11 @@ def test_env_traj_dir_override_is_used_as_supplied(
     (project_root / "config.yaml").write_text(
         """
 explorer:
-  traj_dir: ".fastcontext"
+  traj_dir: ".flash-context"
 """,
         encoding="utf-8",
     )
-    monkeypatch.setenv("FASTCONTEXT_TRAJ_DIR", "env-traj")
+    monkeypatch.setenv("FLASH_CONTEXT_TRAJ_DIR", "env-traj")
 
     settings = load_settings(repo_root=tmp_path / "target")
 
@@ -228,9 +255,9 @@ def test_project_root_env_supports_quotes_comments_and_export(
     _clear_config_env(monkeypatch, tmp_path)
     (tmp_path / ".env").write_text(
         """
-export FASTCONTEXT_BASE_URL="http://dotenv/v1"
-FASTCONTEXT_MODEL='dotenv-model'
-FASTCONTEXT_MAX_TURNS=4 # local override
+export FLASH_CONTEXT_BASE_URL="http://dotenv/v1"
+FLASH_CONTEXT_MODEL='dotenv-model'
+FLASH_CONTEXT_MAX_TURNS=4 # local override
 """,
         encoding="utf-8",
     )
@@ -242,7 +269,7 @@ FASTCONTEXT_MAX_TURNS=4 # local override
     assert settings.max_turns == 4
 
 
-def test_repo_context_config_env_is_ignored(
+def test_flash_context_config_env_is_ignored(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -256,7 +283,7 @@ model:
 """,
         encoding="utf-8",
     )
-    monkeypatch.setenv("REPO_CONTEXT_CONFIG", str(external))
+    monkeypatch.setenv("FLASH_CONTEXT_CONFIG", str(external))
 
     settings = load_settings(repo_root=tmp_path)
 
@@ -282,7 +309,7 @@ def test_invalid_integer_env_raises_config_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _clear_config_env(monkeypatch, tmp_path)
-    monkeypatch.setenv("FASTCONTEXT_MAX_TURNS", "nope")
+    monkeypatch.setenv("FLASH_CONTEXT_MAX_TURNS", "nope")
 
     with pytest.raises(ExplorerError) as exc_info:
         load_settings(repo_root=tmp_path)
@@ -295,7 +322,7 @@ def test_max_parallel_tools_must_be_positive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _clear_config_env(monkeypatch, tmp_path)
-    monkeypatch.setenv("FASTCONTEXT_MAX_PARALLEL_TOOLS", "0")
+    monkeypatch.setenv("FLASH_CONTEXT_MAX_PARALLEL_TOOLS", "0")
 
     with pytest.raises(ExplorerError) as exc_info:
         load_settings(repo_root=tmp_path)

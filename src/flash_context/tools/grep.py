@@ -4,8 +4,8 @@ import re
 from collections.abc import Iterator
 from pathlib import Path
 
-from repo_context.tools.safety import PathSafety
-from repo_context.types import ExplorerError, SearchHit, ToolObservation
+from flash_context.tools.safety import PathSafety
+from flash_context.types import ExplorerError, SearchHit, ToolObservation
 
 MAX_HIT_TEXT = 240
 

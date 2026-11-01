@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from repo_context import cli
-from repo_context import config as config_module
-from repo_context.config import Settings
-from repo_context.types import Citation, ExploreRequest, ExploreResult, RawLocation
+from flash_context import cli
+from flash_context import config as config_module
+from flash_context.config import Settings
+from flash_context.types import Citation, ExploreRequest, ExploreResult, RawLocation
 
 
 @pytest.fixture(autouse=True)
@@ -18,7 +18,7 @@ def _isolated_config_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     for key in list(os.environ):
-        if key.startswith("FASTCONTEXT_"):
+        if key.startswith("FLASH_CONTEXT_"):
             monkeypatch.delenv(key, raising=False)
     monkeypatch.setattr(
         config_module,
@@ -109,7 +109,7 @@ def test_cli_missing_endpoint_is_configuration_error(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    for key in ("FASTCONTEXT_BASE_URL", "FASTCONTEXT_MODEL"):
+    for key in ("FLASH_CONTEXT_BASE_URL", "FLASH_CONTEXT_MODEL"):
         monkeypatch.delenv(key, raising=False)
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -137,7 +137,7 @@ model:
         encoding="utf-8",
     )
     (tmp_path / ".env").write_text(
-        "FASTCONTEXT_BASE_URL=http://dotenv/v1\n",
+        "FLASH_CONTEXT_BASE_URL=http://dotenv/v1\n",
         encoding="utf-8",
     )
 
@@ -190,7 +190,7 @@ def test_cli_exact_fast_path_text_without_endpoint(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    for key in ("FASTCONTEXT_BASE_URL", "FASTCONTEXT_MODEL"):
+    for key in ("FLASH_CONTEXT_BASE_URL", "FLASH_CONTEXT_MODEL"):
         monkeypatch.delenv(key, raising=False)
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -215,7 +215,7 @@ def test_cli_exact_fast_path_json_reports_zero_turns(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    for key in ("FASTCONTEXT_BASE_URL", "FASTCONTEXT_MODEL"):
+    for key in ("FLASH_CONTEXT_BASE_URL", "FLASH_CONTEXT_MODEL"):
         monkeypatch.delenv(key, raising=False)
     repo = tmp_path / "repo"
     repo.mkdir()

@@ -63,7 +63,7 @@ Validation:
 
 - `path` is required.
 - `start_line` and `end_line` are optional positive integers.
-- Returned content must not exceed `FASTCONTEXT_MAX_READ_BYTES`.
+- Returned content must not exceed `FLASH_CONTEXT_MAX_READ_BYTES`.
 
 ## `repo_glob`
 
@@ -120,4 +120,4 @@ Validation:
 
 - `pattern` is required.
 - `glob` is optional and repository-relative.
-- `max_results` cannot exceed configured `FASTCONTEXT_MAX_GREP_RESULTS`.
+- `max_results` cannot exceed configured `FLASH_CONTEXT_MAX_GREP_RESULTS`.

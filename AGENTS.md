@@ -4,7 +4,7 @@ These instructions apply to the entire repository.
 
 ## Role of This File
 
-This file defines durable guidance for agents working on `repo-context`.
+This file defines durable guidance for agents working on `flash-context`.
 
 It is not the detailed implementation plan. Feature requirements, contracts,
 task ordering, schemas, and exact interface details should live in `specs/`,
@@ -22,8 +22,9 @@ they are stated as invariants.
 
 ## Project Contract
 
-`repo-context` is a Python read-only repository context explorer for coding
-agents.
+`flash-context` is a Python read-only context explorer for AI agents, currently
+focused on codebases and repositories. Exploration also applies to documentation,
+configuration, and other local text files within a selected root.
 
 The intended product shape is:
 

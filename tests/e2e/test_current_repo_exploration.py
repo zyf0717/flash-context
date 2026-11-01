@@ -5,15 +5,15 @@ from pathlib import Path
 
 import pytest
 
-from repo_context.agent import NO_CITATIONS_FOUND, explore, format_text_result
-from repo_context.config import SettingsOverrides, load_settings
-from repo_context.types import ExploreRequest, ExplorerError
+from flash_context.agent import NO_CITATIONS_FOUND, explore, format_text_result
+from flash_context.config import SettingsOverrides, load_settings
+from flash_context.types import ExploreRequest, ExplorerError
 
 pytestmark = pytest.mark.e2e
 
-RUN_E2E_ENV = "REPO_CONTEXT_RUN_E2E"
+RUN_E2E_ENV = "FLASH_CONTEXT_RUN_E2E"
 QUERY = (
-    "In src/repo_context/agent.py, find the definition of `EvidenceState`. "
+    "In src/flash_context/agent.py, find the definition of `EvidenceState`. "
     "Return citations only."
 )
 
@@ -49,7 +49,7 @@ def test_current_repo_e2e_returns_controller_validated_citation() -> None:
         citation.label() for citation in result.citations
     )
     assert any(
-        citation.path == "src/repo_context/agent.py" for citation in result.citations
+        citation.path == "src/flash_context/agent.py" for citation in result.citations
     )
 
     for citation in result.citations:

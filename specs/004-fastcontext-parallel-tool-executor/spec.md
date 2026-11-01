@@ -22,15 +22,15 @@ This implementation follows the Microsoft FastContext contract in these
 specific ways:
 
 - FastContext is described as delegated repository exploration that returns
-  compact file-line evidence for a main coding agent; `repo-context` keeps CLI
+  compact file-line evidence for a main coding agent; `flash-context` keeps CLI
   and MCP as adapters over one exploration core.
-- FastContext exposes read-only `Read`, `Glob`, and `Grep`; `repo-context`
+- FastContext exposes read-only `Read`, `Glob`, and `Grep`; `flash-context`
   exposes only root-scoped `read_file`, `repo_glob`, and `repo_grep`.
-- FastContext supports independent same-turn parallel tool calls; `repo-context`
+- FastContext supports independent same-turn parallel tool calls; `flash-context`
   executes same-turn local tool calls concurrently while preserving transcript
   order.
 - FastContext finalizes with compact `<final_answer>` file-line evidence;
-  `repo-context` prompts for that shape and renders citation-mode output from
+  `flash-context` prompts for that shape and renders citation-mode output from
   controller-validated citations.
 
 Primary references: [Microsoft FastContext README](https://github.com/microsoft/fastcontext),
@@ -63,7 +63,7 @@ and [FastContext paper](https://arxiv.org/html/2606.14066v1).
 One tool-execution concurrency setting controls local tool parallelism:
 
 ```text
-FASTCONTEXT_MAX_PARALLEL_TOOLS=4
+FLASH_CONTEXT_MAX_PARALLEL_TOOLS=4
 ```
 
 YAML shape:

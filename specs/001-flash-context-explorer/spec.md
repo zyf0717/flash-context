@@ -1,6 +1,6 @@
-# Feature Specification: Repo Context Explorer
+# Feature Specification: Flash Context Explorer
 
-Feature Branch: `001-repo-context-explorer`
+Feature Branch: `001-flash-context-explorer`
 
 Created: 2026-06-18
 
@@ -18,13 +18,13 @@ receives compact file paths and line ranges that identify the relevant context.
 Why this priority: The CLI validates the core value without coupling the product
 to MCP client behavior.
 
-Independent Test: Run `repo-context explore` against a fixture repository and
+Independent Test: Run `flash-context explore` against a fixture repository and
 verify the answer cites relevant files and line ranges without modifying files.
 
 Acceptance Scenarios:
 
 1. Given a local repository and configured FastContext-compatible endpoint, When
-   the user runs `repo-context explore --query "Find validation logic" --repo .
+   the user runs `flash-context explore --query "Find validation logic" --repo .
    --max-turns 6 --citation`, Then the command returns cited repository paths
    and line ranges.
 2. Given no endpoint configuration, When the command runs, Then it exits with a
@@ -90,7 +90,7 @@ contains no secrets from denylisted files.
 
 Acceptance Scenarios:
 
-1. Given `FASTCONTEXT_TRAJ_DIR` is set, When exploration completes, Then a run
+1. Given `FLASH_CONTEXT_TRAJ_DIR` is set, When exploration completes, Then a run
    log is written under that directory.
 2. Given a denied file path is encountered, When the run is logged, Then the log
    records the rejection without including file contents.
@@ -109,7 +109,7 @@ Acceptance Scenarios:
 
 ### Functional Requirements
 
-- FR-001: The system MUST provide a CLI command named `repo-context explore`.
+- FR-001: The system MUST provide a CLI command named `flash-context explore`.
 - FR-002: The CLI MUST accept `--query`, `--repo`, `--max-turns`, `--citation`,
   and `--format text|json`.
 - FR-003: The system MUST target Python 3.13+.
@@ -163,7 +163,7 @@ Acceptance Scenarios:
 
 ## Assumptions
 
-- Package name is `repo-context`; Python package is `repo_context`.
+- Package name is `flash-context`; Python package is `flash_context`.
 - Runtime baseline is Python 3.13+ managed with `uv`.
 - First backend is OpenAI-compatible chat completions, not ranked context search.
 - OKF is deferred; this repo uses plain markdown docs for human-readable plans.

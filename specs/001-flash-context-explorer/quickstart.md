@@ -1,4 +1,4 @@
-# Quickstart: Repo Context Explorer
+# Quickstart: Flash Context Explorer
 
 This quickstart describes the implemented CLI-first behavior for spec `001`.
 
@@ -9,16 +9,29 @@ This quickstart describes the implemented CLI-first behavior for spec `001`.
 - OpenAI-compatible FastContext endpoint
 - Local repository to inspect
 
+## Install from PyPI
+
+```bash
+uv tool install flash-context
+flash-context --help
+```
+
+Use `uv tool install 'flash-context[mcp]'` for the MCP adapter, or launch it
+directly with `uvx --from 'flash-context[mcp]' flash-context mcp --transport stdio`.
+Published installations use process environment variables and CLI overrides;
+YAML and `.env` discovery is available only in a source checkout.
+
 ## Install for Development
 
 ```bash
-uv sync
-uv run repo-context --help
+uv sync --locked --extra mcp
+uv run flash-context --help
 ```
 
 ## Configure Endpoint
 
-Default operator config in the `repo-context` project root:
+For source development, default operator config lives in the `flash-context`
+project root:
 
 ```bash
 cp config.yaml.example config.yaml
@@ -29,7 +42,7 @@ the explorer's operator config independent of whatever target folder is being
 read.
 
 Relative paths in `config.yaml`, including `explorer.traj_dir`, resolve from
-the `repo-context` project root. Environment path overrides are used as
+the `flash-context` project root. Environment path overrides are used as
 provided.
 
 Use project-root `.env` or process environment variables for overrides:
@@ -41,19 +54,19 @@ cp .env.example .env
 Or export process environment variables:
 
 ```bash
-export FASTCONTEXT_BASE_URL=http://localhost:8000/v1
-export FASTCONTEXT_MODEL=your-model-name
-export FASTCONTEXT_API_KEY=
-export FASTCONTEXT_MAX_TURNS=6
-export FASTCONTEXT_MAX_READ_BYTES=12000
-export FASTCONTEXT_MAX_GREP_RESULTS=50
-export FASTCONTEXT_TRAJ_DIR=.fastcontext
-export FASTCONTEXT_TIMEOUT_SECONDS=120
-export FASTCONTEXT_MAX_OBSERVATION_CHARS=6000
-export FASTCONTEXT_MAX_READ_LINES=120
-export FASTCONTEXT_MAX_COMPLETION_TOKENS=512
-export FASTCONTEXT_TEMPERATURE=0
-export FASTCONTEXT_MAX_PARALLEL_TOOLS=4
+export FLASH_CONTEXT_BASE_URL=http://100.105.153.85:1234/v1
+export FLASH_CONTEXT_MODEL=Qwen/Qwen3.5-4B
+export FLASH_CONTEXT_API_KEY=
+export FLASH_CONTEXT_MAX_TURNS=6
+export FLASH_CONTEXT_MAX_READ_BYTES=12000
+export FLASH_CONTEXT_MAX_GREP_RESULTS=50
+export FLASH_CONTEXT_TRAJ_DIR=.flash-context
+export FLASH_CONTEXT_TIMEOUT_SECONDS=120
+export FLASH_CONTEXT_MAX_OBSERVATION_CHARS=6000
+export FLASH_CONTEXT_MAX_READ_LINES=120
+export FLASH_CONTEXT_MAX_COMPLETION_TOKENS=512
+export FLASH_CONTEXT_TEMPERATURE=0
+export FLASH_CONTEXT_MAX_PARALLEL_TOOLS=4
 ```
 
 Optional operator config:
@@ -70,8 +83,8 @@ explorer:
     - "build"
 
 model:
-  base_url: "http://localhost:8000/v1"
-  model: "your-model-name"
+  base_url: "http://100.105.153.85:1234/v1"
+  model: "Qwen/Qwen3.5-4B"
   api_key: ""
   timeout_seconds: 120
   max_completion_tokens: 512
@@ -92,7 +105,7 @@ The repository includes `config.yaml.example` with this shape.
 Use the CLI first for direct local runs and debugging:
 
 ```bash
-uv run repo-context explore \
+uv run flash-context explore \
   --query "Find the request validation logic" \
   --repo . \
   --max-turns 6 \
@@ -109,7 +122,7 @@ tests/test_validation.py:101-140
 JSON output:
 
 ```bash
-uv run repo-context explore \
+uv run flash-context explore \
   --query "Find the request validation logic" \
   --repo . \
   --format json
@@ -129,7 +142,7 @@ uv sync --extra mcp
 Server command:
 
 ```bash
-uv run repo-context mcp \
+uv run flash-context mcp \
   --transport stdio
 ```
 
@@ -144,22 +157,22 @@ Generic MCP client config shape:
 ```json
 {
   "mcpServers": {
-    "repo-context": {
+    "flash-context": {
       "command": "uv",
       "args": [
         "run",
         "--project",
-        "/path/to/repo-context",
+        "/path/to/flash-context",
         "--extra",
         "mcp",
-        "repo-context",
+        "flash-context",
         "mcp",
         "--transport",
         "stdio"
       ],
       "env": {
-        "FASTCONTEXT_BASE_URL": "http://localhost:8000/v1",
-        "FASTCONTEXT_MODEL": "your-model-name"
+        "FLASH_CONTEXT_BASE_URL": "http://100.105.153.85:1234/v1",
+        "FLASH_CONTEXT_MODEL": "Qwen/Qwen3.5-4B"
       }
     }
   }
@@ -173,6 +186,9 @@ uv run pytest
 uv run ruff check .
 uv run mypy
 ```
+
+CI checks Python 3.13 and 3.14, plus clean wheel and source installs.
+[Release instructions](../../docs/releasing.md) describe the publishing pipeline.
 
 Errors are printed to stderr as `CODE: message`; denied paths never include file
 contents in the error payload.

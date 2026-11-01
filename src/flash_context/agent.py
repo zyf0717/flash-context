@@ -7,11 +7,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from repo_context.config import Settings
-from repo_context.llm import ChatClient
-from repo_context.logging import TrajectoryRecorder
-from repo_context.tools import read_file, repo_glob, repo_grep
-from repo_context.types import (
+from flash_context.config import Settings
+from flash_context.llm import ChatClient
+from flash_context.logging import TrajectoryRecorder
+from flash_context.tools import read_file, repo_glob, repo_grep
+from flash_context.types import (
     Citation,
     ExploreRequest,
     ExplorerError,
@@ -308,7 +308,7 @@ def tool_schemas() -> list[dict[str, Any]]:
                             "type": "string",
                             "description": (
                                 "Repository-relative file path with no leading "
-                                "slash, e.g. src/repo_context/types.py."
+                                "slash, e.g. src/flash_context/types.py."
                             ),
                         },
                         "start_line": {"type": "integer", "minimum": 1},
