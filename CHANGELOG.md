@@ -4,6 +4,11 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+### Changed
+
+- Condense the README overview and move safety and evidence-validation details
+  to the architecture documentation.
+
 ## [0.3.1] - 2026-11-01
 
 ### Fixed

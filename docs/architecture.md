@@ -12,6 +12,24 @@ CLI / MCP adapter → shared exploration core → model endpoint
                   read_file / repo_glob / repo_grep
 ```
 
+## Safety and evidence validation
+
+Scans and regex execution are bounded; partial results report truncation.
+Citation validation checks safe paths and existing line coverage. Semantic
+relevance, citation precision, and minimal ranges depend on the explorer model.
+
+Implementation queries continue past documentation-only citations within the
+turn budget. Documentation-only fallbacks carry incomplete-result metadata and
+warnings. Build outputs such as `dist/` remain excluded; inspect a source
+checkout for implementation evidence. See
+[exploration progress and evidence](configuration.md#exploration-progress-and-evidence)
+for fallback behavior.
+
+Optional trajectory logs contain metadata only and must stay outside the
+inspected repository. See
+[local execution budgets and diagnostics](configuration.md#local-execution-budgets-and-diagnostics)
+for limits, truncation, and logging settings.
+
 ## Implementation status
 
 This repository has the initial Python 3.13+ implementation for spec `001`:
