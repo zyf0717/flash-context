@@ -4,6 +4,8 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-01
+
 ### Fixed
 
 - Clarify exploration and evidence-selection prompts to cite code that performs
