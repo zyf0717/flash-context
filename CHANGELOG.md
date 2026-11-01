@@ -23,9 +23,10 @@ User-visible changes and migration instructions for each release.
 
 ### Changed
 
-- Consolidate current contracts and replace completed planning scaffolds with a
-  linked history index. Simplify query routing, configuration, loop finalization,
-  test fixtures, live evaluation, and CI jobs.
+- Consolidate contracts under `docs/`, remove planning scaffolds and separate
+  agent instructions, and keep contributor guidance in `CONTRIBUTING.md`.
+  Simplify query routing, configuration, loop finalization, test fixtures,
+  live evaluation, and CI jobs.
 - Benchmark against independent reviewed ranges, recording package/parser
   versions and effective settings. Live probes share the same pinned cases.
 

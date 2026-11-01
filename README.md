@@ -74,7 +74,7 @@ See [MCP integration](docs/mcp.md) for editor configuration and source launches.
 ## Documentation
 
 - [Configuration](docs/configuration.md): endpoint settings, precedence, and limits.
-- [Architecture and scope](docs/architecture.md): design, status, specs, and references.
+- [Architecture and scope](docs/architecture.md): shared core and module responsibilities.
 - [Contributing](CONTRIBUTING.md): development setup, tests, and pull requests.
 - [Changelog](CHANGELOG.md): release history and migration instructions.
 - [Releasing](docs/releasing.md): package checks and tag-driven TestPyPI/PyPI publishing.

@@ -1,90 +1,32 @@
 # Contributing
 
-Bug reports, focused fixes, tests, and documentation improvements are welcome.
-For substantial features or architecture changes, open an issue to discuss the
-scope before implementing them.
-
-## Development setup
-
-Install Python 3.13+ and `uv`, then run these commands from your clone:
+Use Python 3.13+ and `uv`. From the project root:
 
 ```bash
 uv sync --locked --extra mcp
-uv run --locked flash-context --help
-```
-
-The MCP extra enables development of the optional adapter. An external model
-endpoint is not needed for the standard test suite.
-
-See [Configuration](docs/configuration.md) for endpoint settings and the
-[README](README.md) for CLI usage and MCP integration links. Source
-checkouts load operator configuration from project-root `config.yaml` and
-`.env`; keep credentials and local configuration out of commits.
-
-## Checks
-
-Run the same checks as CI before submitting a pull request:
-
-```bash
 uv run --locked ruff check .
 uv run --locked mypy
 uv run --locked pytest -m "not e2e"
 ```
 
-`.github/workflows/ci.yml` runs on `main` pushes and pull requests to `main`.
-It checks Python 3.13 and 3.14 and verifies clean wheel and source installs.
-The tag release workflow reuses these checks before publishing.
-[Releasing](docs/releasing.md) covers package checks and publication.
+Standard tests mock external endpoints. CI tests Python 3.13 and 3.14 and checks
+installed wheel/source packages. Optional live probes and timing instructions
+are in [benchmarks](benchmarks/README.md).
 
-## Endpoint-backed tests
+## Changes
 
-Live quality probes and the benchmark share pinned fixtures and independently
-reviewed expected ranges. See [benchmark instructions](benchmarks/README.md) for
-repetitions, timing, metrics, and comparing installed releases. To run the probes:
+- Keep interfaces typed, adapters thin, and logic in the shared core. Prefer
+  small, direct implementations and proportionate regression tests.
+- Preserve read-only, root-scoped access, path/symlink checks, deny rules, resource
+  limits, and metadata-only logging. Never expose source or secrets in diagnostics.
+- Treat [docs](docs/architecture.md) as the source of truth. Update the relevant
+  contract and affected examples when behavior changes; avoid repeating policy.
+- Run `uv lock` when dependencies change. Record user-visible changes and migration
+  notes in `CHANGELOG.md` under `[Unreleased]`; see [releasing](docs/releasing.md).
 
-```bash
-FLASH_CONTEXT_RUN_E2E=1 uv run --locked pytest tests/e2e -s
-```
+Use a `dev/` branch and Conventional Commits. Submit a pull request to `main`
+with the problem, resulting behavior, and validation. Merge by squash or rebase
+after CI passes; do not push directly to `main` or bypass required checks.
 
-## Implementation guidelines
-
-- Keep changes focused and follow existing Python conventions. Prefer simple,
-  typed interfaces and avoid unnecessary dependencies or abstractions.
-- Keep CLI and MCP adapters thin; both use the shared exploration core.
-- Preserve read-only repository access. Centralize path validation and retain
-  traversal, symlink, denylist, and resource-limit protections.
-- Add proportionate regression tests for changed behavior. Standard tests must
-  mock external endpoints and must not depend on credentials or live services.
-- Update the canonical contract for changed behavior and affected examples; avoid
-  copying shared policy into adapter or configuration docs.
-- Refresh `uv.lock` with `uv lock` when changing dependencies.
-- Add user-visible changes and migration instructions to `CHANGELOG.md` under
-  `[Unreleased]`. Version preparation promotes those notes to a dated release
-  entry; see [Releasing](docs/releasing.md).
-
-Read [AGENTS.md](AGENTS.md) for repository-wide guidance,
-[shared contract](docs/contracts.md) for current behavior, and
-[spec history](specs/README.md) for completed work and active proposals.
-
-## Issues and pull requests
-
-Report bugs with reproduction steps, expected and actual behavior, and relevant
-Python/package versions. Redact credentials and sensitive repository content
-from logs and examples.
-
-Create a branch in your fork or checkout (for example, `dev/short-description`)
-and use Conventional Commits, such as
-`fix: reject symlink escapes` or `docs: clarify endpoint configuration`.
-In the pull request, explain the problem, resulting behavior, and validation
-performed. Include any relevant issue or spec links.
-
-`main` requires a pull request with passing `test (3.13)`, `test (3.14)`, and
-`build` checks, an up-to-date branch, and resolved review conversations.
-Merge with squash or rebase; merge commits, force pushes, and deletion of
-`main` are blocked. Only `zyf0717` has bypass access. No review approval count
-is required while the project has a sole maintainer.
-
-## License
-
-Contributions are submitted under the project's
-[Apache License 2.0](LICENSE).
+Report bugs with reproduction steps and Python/package versions. Redact secrets
+from examples and logs. Contributions use the [Apache License 2.0](LICENSE).

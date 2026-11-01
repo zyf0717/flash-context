@@ -108,7 +108,7 @@ def test_pathless_definition_in_markdown_does_not_fast_path(
 ) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
-    (repo / "spec.md").write_text(
+    (repo / "guide.md").write_text(
         "```python\ndef explore():\n    pass\n```\n",
         encoding="utf-8",
     )
