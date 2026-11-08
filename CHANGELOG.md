@@ -4,6 +4,16 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Vendored bare Git repositories (directories named `*.git`, common in test
+  fixtures) are now denied like `.git` itself, so their sample hooks and
+  objects no longer pollute search results or consume scan budget. (#28)
+- Comment-only ranges can no longer be returned as verified citations. Anchors
+  on comment lines in parsed languages are rejected, line windows in unparsed
+  languages must contain at least one code line, and R and Julia files are now
+  covered by grammar-based boundaries. (#29)
+
 ## [0.5.0] - 2026-11-01
 
 ### Changed

@@ -52,6 +52,47 @@ def test_overlapping_anchors_keep_their_resolved_identity(
     assert result.render(anchors) == "a.py:1-5\na.py:2-3"
 
 
+def test_comment_only_line_window_is_rejected_for_ungrammared_files(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "grids.dat").write_text(
+        "# Shared component grids, exposure panels, and temporal evaluation.\n"
+        "\n"
+        "###################################\n"
+        "### Components and weight grids ###\n"
+        "###################################\n"
+    )
+    (tmp_path / "weights.dat").write_text(
+        "# header\n" * 5 + "value = compute(x)\n" + "# footer\n" * 5
+    )
+    resolver = CitationResolver(tmp_path, Settings(), None)
+    comments = resolver.parse("grids.dat:4")
+    assert not comments.citations and comments.feedback
+    code = resolver.parse("weights.dat:6")
+    assert [c.path for c in code.citations] == ["weights.dat"]
+
+
+def test_r_and_julia_definitions_resolve_via_grammar(tmp_path: Path) -> None:
+    (tmp_path / "weights.R").write_text("compute_wbgt <- function(t) {\n  t + 1\n}\n")
+    (tmp_path / "grid.jl").write_text("function compute(x)\n  x + 1\nend\n")
+    resolver = CitationResolver(tmp_path, Settings(), None)
+    for anchor, name in (("weights.R:1", "R"), ("grid.jl:1", "Julia")):
+        result = resolver.parse(anchor)
+        assert result.citations, anchor
+        assert result.citations[0].end_line == 3, name
+
+
+def test_comment_lines_are_not_citable_regions_in_parsed_languages(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "notes.R").write_text("# Shared component grids.\n\nvalue <- 1\n")
+    resolver = CitationResolver(tmp_path, Settings(), None)
+    comment = resolver.parse("notes.R:1")
+    assert not comment.citations and comment.feedback
+    code = resolver.parse("notes.R:3")
+    assert [c.path for c in code.citations] == ["notes.R"]
+
+
 def test_unicode_separators_are_not_source_lines(tmp_path: Path) -> None:
     text = 'a="x\u0085y\u2028z"\r\nz=1\r\n'
     (tmp_path / "a.py").write_bytes(text.encode())
