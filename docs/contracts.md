@@ -74,14 +74,17 @@ Each turn returns its own accepted anchors, feedback, and diagnostics.
 Prose uses the original anchor-to-citation mapping, including overlapping units.
 
 Bundled Tree-sitter grammars cover Python, JS/JSX, TS/TSX, C/C++, C#, Java, Go,
-Rust, Ruby, PHP, Bash, Lua, Kotlin, and Swift. Names use dotted qualification;
-ambiguous overloads require line anchors. Definitions include decorators/export
+Rust, Ruby, PHP, Bash, Lua, Kotlin, Swift, R, and Julia. Names use dotted
+qualification; ambiguous overloads require line anchors. Definitions include decorators/export
 wrappers. Large definitions require line anchors inside smaller complete syntax
-regions or headers. Distinct syntax units remain separate.
+regions or headers. Distinct syntax units remain separate. Comment nodes do not
+form standalone syntax regions.
 
 Unsupported or invalid syntax uses line windows of ±5 lines, bounded by available
-complete lines. Parser outcomes distinguish unsupported, invalid, limited, timed
-out, and successfully parsed input. Input caps and parser deadlines emit explicit
+complete lines. Windows must contain a nonblank line without a recognized
+language-specific comment prefix. Unknown file types do not assume comment syntax.
+Parser outcomes distinguish unsupported, invalid, limited, timed out, and
+successfully parsed input. Input caps and parser deadlines emit explicit
 incomplete-result diagnostics. Symbols require parsed definitions. Grammars are
 bundled and never downloaded during search.
 

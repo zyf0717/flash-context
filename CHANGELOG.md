@@ -4,6 +4,19 @@ User-visible changes and migration instructions for each release.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-08
+
+### Fixed
+
+- Vendored bare Git repositories (directories named `*.git`, common in test
+  fixtures) are now denied like `.git` itself, so their sample hooks and
+  objects no longer pollute search results or consume scan budget. (#28)
+- Exclude comment nodes from parsed citation boundaries, including Kotlin and
+  Swift block comments. Check fallback windows against language-specific comment
+  prefixes, preserving CSS selectors, Clojure forms, and Markdown headings. (#29)
+- Resolve R and Julia files with grammar-based boundaries, including bounded
+  expressions inside R functions that exceed the citation line limit. (#29)
+
 ## [0.5.0] - 2026-11-01
 
 ### Changed

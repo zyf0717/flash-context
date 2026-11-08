@@ -354,6 +354,21 @@ def test_denied_directories_are_pruned(tmp_path: Path) -> None:
     assert scan.call_count == 1
 
 
+def test_vendored_bare_git_repos_are_denied(tmp_path: Path) -> None:
+    hooks = tmp_path / "data" / "git" / "106863488.git" / "hooks"
+    hooks.mkdir(parents=True)
+    (hooks / "applypatch-msg.sample").write_text("#!/bin/sh\necho applypatch\n")
+    (tmp_path / "snapshot.py").write_text("# patches are applied here\n")
+    result = repo_glob(repo_root=tmp_path, pattern="**/*", max_results=20)
+    assert result.matches == ["snapshot.py"]
+    with pytest.raises(SearchError, match="PATH_DENIED"):
+        read_file(
+            repo_root=tmp_path,
+            path="data/git/106863488.git/hooks/applypatch-msg.sample",
+            max_bytes=100,
+        )
+
+
 def test_cli_and_mcp_reject_internal_logging(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -52,6 +52,95 @@ def test_overlapping_anchors_keep_their_resolved_identity(
     assert result.render(anchors) == "a.py:1-5\na.py:2-3"
 
 
+def test_comment_only_line_window_is_rejected_for_ungrammared_files(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "grids.yaml").write_text(
+        "# Shared component grids, exposure panels, and temporal evaluation.\n"
+        "\n"
+        "###################################\n"
+        "### Components and weight grids ###\n"
+        "###################################\n"
+    )
+    (tmp_path / "weights.yaml").write_text(
+        "# header\n" * 5 + "value = compute(x)\n" + "# footer\n" * 5
+    )
+    resolver = CitationResolver(tmp_path, Settings(), None)
+    comments = resolver.parse("grids.yaml:4")
+    assert not comments.citations and comments.feedback
+    code = resolver.parse("weights.yaml:6")
+    assert [c.path for c in code.citations] == ["weights.yaml"]
+
+
+@pytest.mark.parametrize(
+    "path,text,accepted",
+    [
+        ("style.css", "#app { display: flex; }\n", True),
+        ("style.css", "/* comment only */\n", False),
+        ("query.sql", "-- comment only\n", False),
+        ("form.clj", "#(inc %)\n", True),
+        ("form.clj", "; comment only\n", False),
+        ("README.md", "# Heading\n", True),
+        ("data.unknown", "# data\n", True),
+        ("data.unknown", " \n\n", False),
+    ],
+)
+def test_line_window_uses_language_comment_syntax(
+    tmp_path: Path, path: str, text: str, accepted: bool
+) -> None:
+    (tmp_path / path).write_text(text)
+    result = CitationResolver(tmp_path, Settings(), None).parse(f"{path}:1")
+    assert bool(result.citations) is accepted
+    assert bool(result.feedback) is not accepted
+
+
+def test_long_r_function_has_bounded_body_expressions(tmp_path: Path) -> None:
+    (tmp_path / "long.R").write_text(
+        "compute <- function(x) {\n" + "  x <- x + 1\n" * 250 + "  print(x)\n}\n"
+    )
+    result = CitationResolver(tmp_path, Settings(), None).parse(
+        "long.R:100\nlong.R:252"
+    )
+    assert not result.feedback
+    assert [c.label() for c in result.citations] == ["long.R:100", "long.R:252"]
+    assert all(
+        c.precision and c.precision.boundary_kind == "syntax" for c in result.citations
+    )
+
+
+@pytest.mark.parametrize("extension", ["kt", "swift"])
+def test_multiline_comments_are_not_citable_syntax(
+    tmp_path: Path, extension: str
+) -> None:
+    path = f"notes.{extension}"
+    (tmp_path / path).write_text("/* comment only\n * still a comment\n */\n")
+    resolver = CitationResolver(tmp_path, Settings(), None)
+    result = resolver.parse(f"{path}:1\n{path}:1-3")
+    assert resolver.sources[path].status == "parsed"
+    assert not result.citations and len(result.feedback) == 2
+
+
+def test_r_and_julia_definitions_resolve_via_grammar(tmp_path: Path) -> None:
+    (tmp_path / "weights.R").write_text("compute_wbgt <- function(t) {\n  t + 1\n}\n")
+    (tmp_path / "grid.jl").write_text("function compute(x)\n  x + 1\nend\n")
+    resolver = CitationResolver(tmp_path, Settings(), None)
+    for anchor, name in (("weights.R:1", "R"), ("grid.jl:1", "Julia")):
+        result = resolver.parse(anchor)
+        assert result.citations, anchor
+        assert result.citations[0].end_line == 3, name
+
+
+def test_comment_lines_are_not_citable_regions_in_parsed_languages(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "notes.R").write_text("# Shared component grids.\n\nvalue <- 1\n")
+    resolver = CitationResolver(tmp_path, Settings(), None)
+    comment = resolver.parse("notes.R:1")
+    assert not comment.citations and comment.feedback
+    code = resolver.parse("notes.R:3")
+    assert [c.path for c in code.citations] == ["notes.R"]
+
+
 def test_unicode_separators_are_not_source_lines(tmp_path: Path) -> None:
     text = 'a="x\u0085y\u2028z"\r\nz=1\r\n'
     (tmp_path / "a.py").write_bytes(text.encode())

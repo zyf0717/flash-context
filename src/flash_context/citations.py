@@ -54,6 +54,8 @@ LANGUAGES = {
     "kt": "kotlin",
     "kts": "kotlin",
     "swift": "swift",
+    "r": "r",
+    "jl": "julia",
 }
 DEFINITIONS = frozenset(
     {
@@ -81,6 +83,48 @@ DEFINITIONS = frozenset(
         "protocol_declaration",
     }
 )
+COMMENT_NODE_TYPES = frozenset(
+    {"comment", "line_comment", "block_comment", "multiline_comment"}
+)
+COMMENT_LINE_PREFIXES = {
+    **dict.fromkeys(
+        ("python", "ruby", "bash", "r", "julia", "yaml", "yml", "toml"), ("#",)
+    ),
+    **dict.fromkeys(
+        (
+            "javascript",
+            "typescript",
+            "tsx",
+            "go",
+            "rust",
+            "java",
+            "c",
+            "cpp",
+            "csharp",
+            "php",
+            "kotlin",
+            "swift",
+            "scss",
+            "less",
+        ),
+        ("//", "/*", "*/"),
+    ),
+    "css": ("/*", "*/"),
+    "lua": ("--",),
+    "sql": ("--", "/*", "*/"),
+    **dict.fromkeys(("clj", "cljs", "cljc", "edn", "lisp", "el", "scm", "rkt"), (";",)),
+    **dict.fromkeys(("ini", "cfg", "conf"), ("#", ";")),
+}
+
+
+def _has_code_content(lines: list[str], path: str) -> bool:
+    """Reject blank/comment lines using known syntax, without guessing for prose."""
+    extension = Path(path).suffix.lstrip(".").lower()
+    prefixes = COMMENT_LINE_PREFIXES.get(LANGUAGES.get(extension, extension), ())
+    return any(
+        stripped and not stripped.startswith(prefixes)
+        for stripped in (line.strip() for line in lines)
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,6 +266,8 @@ class CitationResolver:
                     while stack:
                         budget.consume()
                         node, scope = stack.pop()
+                        if node.type in COMMENT_NODE_TYPES:
+                            continue
                         start, end = node.start_point.row + 1, _end(node)
                         name = _name(node) if node.type in DEFINITIONS else None
                         qualified = ".".join((*scope, name)) if name else None
@@ -248,6 +294,11 @@ class CitationResolver:
                                 node.parent is not None
                                 and node.parent.type
                                 in {"module", "program", "source_file"}
+                            )
+                            or (
+                                language == "r"
+                                and node.parent is not None
+                                and node.parent.type == "braced_expression"
                             )
                             or node.type.endswith(("_statement", "_declaration"))
                             or node.type
@@ -325,11 +376,14 @@ class CitationResolver:
                 region = min(small, key=lambda r: r.end - r.start) if small else None
             if region is None and source.regions is None:
                 radius = min(5, (self.settings.max_citation_lines - 1) // 2)
-                region = Region(
-                    max(1, line - radius),
-                    min(len(source.lines), line + radius),
-                    "line_window",
-                )
+                start = max(1, line - radius)
+                end = min(len(source.lines), line + radius)
+                if not _has_code_content(source.lines[start - 1 : end], path):
+                    raise AnchorRejected(
+                        "Line window contains only blank or comment lines; "
+                        "choose a line inside actual code."
+                    )
+                region = Region(start, end, "line_window")
         if region is None:
             raise AnchorRejected(
                 "No bounded syntax region contains the anchor; choose another line."
