@@ -83,14 +83,46 @@ DEFINITIONS = frozenset(
         "protocol_declaration",
     }
 )
-COMMENT_NODE_TYPES = frozenset({"comment", "line_comment", "block_comment"})
-COMMENT_LINE_PREFIXES = ("#", "//", "--", ";;", "/*", "*/")
+COMMENT_NODE_TYPES = frozenset(
+    {"comment", "line_comment", "block_comment", "multiline_comment"}
+)
+COMMENT_LINE_PREFIXES = {
+    **dict.fromkeys(
+        ("python", "ruby", "bash", "r", "julia", "yaml", "yml", "toml"), ("#",)
+    ),
+    **dict.fromkeys(
+        (
+            "javascript",
+            "typescript",
+            "tsx",
+            "go",
+            "rust",
+            "java",
+            "c",
+            "cpp",
+            "csharp",
+            "php",
+            "kotlin",
+            "swift",
+            "scss",
+            "less",
+        ),
+        ("//", "/*", "*/"),
+    ),
+    "css": ("/*", "*/"),
+    "lua": ("--",),
+    "sql": ("--", "/*", "*/"),
+    **dict.fromkeys(("clj", "cljs", "cljc", "edn", "lisp", "el", "scm", "rkt"), (";",)),
+    **dict.fromkeys(("ini", "cfg", "conf"), ("#", ";")),
+}
 
 
-def _has_code_content(lines: list[str]) -> bool:
-    """True when at least one line is neither blank nor comment-prefixed."""
+def _has_code_content(lines: list[str], path: str) -> bool:
+    """Reject blank/comment lines using known syntax, without guessing for prose."""
+    extension = Path(path).suffix.lstrip(".").lower()
+    prefixes = COMMENT_LINE_PREFIXES.get(LANGUAGES.get(extension, extension), ())
     return any(
-        stripped and not stripped.startswith(COMMENT_LINE_PREFIXES)
+        stripped and not stripped.startswith(prefixes)
         for stripped in (line.strip() for line in lines)
     )
 
@@ -263,6 +295,11 @@ class CitationResolver:
                                 and node.parent.type
                                 in {"module", "program", "source_file"}
                             )
+                            or (
+                                language == "r"
+                                and node.parent is not None
+                                and node.parent.type == "braced_expression"
+                            )
                             or node.type.endswith(("_statement", "_declaration"))
                             or node.type
                             in {
@@ -341,7 +378,7 @@ class CitationResolver:
                 radius = min(5, (self.settings.max_citation_lines - 1) // 2)
                 start = max(1, line - radius)
                 end = min(len(source.lines), line + radius)
-                if not _has_code_content(source.lines[start - 1 : end]):
+                if not _has_code_content(source.lines[start - 1 : end], path):
                     raise AnchorRejected(
                         "Line window contains only blank or comment lines; "
                         "choose a line inside actual code."
