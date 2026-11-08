@@ -102,7 +102,9 @@ class PathSafety:
     def ensure_allowed(self, path: Path) -> None:
         rel = path.relative_to(self.repo_root).as_posix()
         parts = rel.split("/")
-        if any(part in DENY_DIR_NAMES for part in parts):
+        # Any component ending in ``.git`` is a bare repository directory; its
+        # internals (sample hooks, objects, refs) are never search targets.
+        if any(part in DENY_DIR_NAMES or part.endswith(".git") for part in parts):
             raise SearchError(
                 "PATH_DENIED",
                 "Requested path is denied by repository safety policy",
